@@ -5,6 +5,8 @@
  echo 'new new connection this should commit';
  echo '<br>';
  echo 'why is it not committing';
+ echo '<br>';
+ echo 'new test';
 
  //  start of header
  echo '<section class="bg-attachment position-relative d-flex align-items-end justify-content-center hero-content" style="background:url(' . get_the_post_thumbnail_url() . ');background-size:cover;background-attachment:fixed;background-position:top;padding-bottom:15px;height:87vh;">';
