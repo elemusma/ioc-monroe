@@ -8,6 +8,8 @@
  */
 
 get_header();
+
+echo 'hello';
 ?>
 
 <main id="site-content">
