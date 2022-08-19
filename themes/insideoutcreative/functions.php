@@ -130,7 +130,7 @@ function smartwp_remove_wp_block_library_css(){
 } 
 add_action( 'wp_enqueue_scripts', 'smartwp_remove_wp_block_library_css', 100 );
 
-// add_filter('show_admin_bar', '__return_false');
+add_filter('show_admin_bar', '__return_false');
 
 // add_filter('comment_form_default_fields', 'remove_website_field_from_comment_form');
 function remove_website_field_from_comment_form($fields)

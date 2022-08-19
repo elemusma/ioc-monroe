@@ -18,7 +18,7 @@ if(get_field('custom_css')) {
 <body <?php body_class(); ?>>
 <?php if(get_field('body','options')) { the_field('body','options'); } ?>
 <div class="blank-space"></div>
-<header class="position-relative pt-3 pb-3 z-3 box-shadow bg-white w-100" style="top:0;left:0;">
+<header class="position-relative pt-2 pb-2 z-3 box-shadow bg-white w-100" style="top:0;left:0;">
 
 <div class="nav">
 <div class="container">
@@ -30,14 +30,20 @@ $logo = get_field('logo','options');
 if($logo){
 echo wp_get_attachment_image($logo['id'],'full',"",['class'=>'w-100 h-auto']); 
 }
+
+echo '</a>';
+echo '</div>';
+echo '<div class="col-lg-4 col-6 d-flex align-items-center justify-content-end">';
+
+echo '<div class="position-relative pt-3 pb-3">';
+echo wp_get_attachment_image(227,'full','',['class'=>'position-absolute h-100 w-auto','style'=>'top:0;left:50%;transform:translate(-50%,0%);']);
+wp_nav_menu(array(
+    'menu' => 'Contact',
+    'menu_class'=>'menu d-flex flex-wrap list-unstyled justify-content-center mb-0'
+)); 
+echo '</div>';
+
 ?>
-</a>
-</div>
-<div class="col-lg-4 col-6 d-flex align-items-center justify-content-end">
-<?php wp_nav_menu(array(
-'menu' => 'Contact',
-'menu_class'=>'menu d-flex flex-wrap list-unstyled justify-content-center mb-0'
-)); ?>
 <a id="navToggle" class="nav-toggle ml-4 d-flex">
 <div style="margin:0px 4px;">
 <div class="line-1"></div>
