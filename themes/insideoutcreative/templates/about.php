@@ -1,97 +1,92 @@
 <?php 
 /**
- * Template Name: About
+ * Template Name: About Story
  */
 get_header(); 
 
+
+// if($showVegan != 'Yes'){
+//     echo get_template_part('partials/navbar-yogurt');
+// } elseif($showVegan == 'Yes'){
+//     echo get_template_part('partials/navbar-vegan');
+// }
+echo get_template_part('partials/navbar-about-story');
+wp_enqueue_style('about-story', get_theme_file_uri('/css/sections/about-story.css'));
 ?>
-<!-- start of intro -->
-<section class="pt-5 pb-5 bg-accent text-white">
-<div class="container">
-<div class="row align-items-center">
-<div class="col-md-6">
-<?php the_field('content'); ?>
-</div>
-<div class="col-md-6 overflow-h">
-    <div class="position-relative">
-<?php if(get_field('image')){ 
-$image = get_field('image');
-echo wp_get_attachment_image($image['id'],'full',"",['class'=>'w-100 h-100 box-shadow img-hover']); ?>
-<?php } else if(has_post_thumbnail()){
-the_post_thumbnail('full',array('class'=>'w-100 h-100 box-shadow img-hover'));
-} else { ?> 
-<?php echo wp_get_attachment_image(26,'full',"",['class'=>'w-100 h-100 box-shadow img-hover']); ?>
-<?php } ?>
-</div>
-</div>
-</div>
-</div>
-</section>
-<!-- end of intro -->
 
-<?php if(have_rows('slides')) : while(have_rows('slides')): the_row(); 
-$bgImage = get_sub_field('background_image');
-?>
-<!-- start of full height -->
-<section class="pt-5 pb-5 position-relative bg-img d-flex justify-content-center align-items-center full-row" style="background:url('<?php echo wp_get_attachment_image_url($bgImage['id'],'full'); ?>');background-size:cover;background-attachment:fixed;">
-
-<div class="overlay"></div>
-    <div class="container">
-        <div class="row">
-            <div class="col-md-12">
-            <div class="inner-content text-white pt-5 pb-5 position-relative">
-                <div class="overlay position-absolute"></div>
-                <div class="position-relative z-1 pl-5 pr-5">
-<?php the_sub_field('content'); ?>
-</div>
-            </div>
-            </div>
-        </div>
-    </div>
-</section>
-<!-- end of full height -->
-<?php endwhile; else: endif; ?>
-
-<?php if(have_rows('team_members')): ?>
-<!-- start of team members -->
-<section class="about-section our-team pt-5 pb-5 position-relative bg-accent texture-bg">
-<div class="background-image"></div>
-<div class="container pt-5 mb-5">
-    <div class="row mb-5 pb-5 justify-content-center">
-        <div class="col-md-9 text-white">
-            <?php the_field('team_description'); ?>
-        </div>
-    </div>
-
-<?php while(have_rows('team_members')): the_row(); ?>
-<!-- start of team members -->
-<div class="row pb-5 mb-5">
-<div class="col-md-5 img--main">
+<!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/2.2.0/anime.js"></script> -->
 <?php 
-$headshot = get_sub_field('headshot');
-echo wp_get_attachment_image($headshot['id'],'full',"",['class'=>'w-100 h-100']); ?>
-</div>
-<div class="col-lg-6 col-md-6 sm-text-center about"> 
-<div class="about-first-half">
-<div class="about-before"></div>
-<div class="about-middle"></div>
-</div>
-<div class="about-after"></div>
-<div class="about-details pt-5 pl-4 pr-4">
-<div class="page details">
-<h4 class="bodoni"><?php the_sub_field('name'); ?></h4>
-<h5 class=""><?php the_sub_field('job_title'); ?></h5>
-</div>
-<p style="line-height:1.25"><small><?php the_sub_field('bio',false,false); ?></small></p>
-</div>
-</div>
-</div>
-<!-- end of team members -->
-<?php endwhile; ?>
+if(have_rows('sections')): while(have_rows('sections')): the_row();
+$image = get_sub_field('image');
+$label = get_sub_field('label');
+$dataAos = get_sub_field('data_aos');
+$background = get_sub_field('background');
+$section = sanitize_title_with_dashes($label);
+$content = get_sub_field('content');
+?>
 
+<section id="section-<?php echo $section; ?>" class="full-height pt-5 pb-5 position-relative overflow-h section-full d-flex align-items-center" style="min-height:100vh;">
+<div class="container">
+    <div class="row align-items-center">
+    <div class="col-md-6" data-aos="<?php echo $dataAos; ?>" data-aos-delay="200" style="background:<?php echo $background; ?>">
+<div class="text-white" style="margin-bottom:-1rem;">
+<?php echo $content; ?>
 </div>
+</div>
+
+        <div class="col-md-6">
+            <div class="position-relative">
+            <div style="background: #9bbec7;top: -25px;right: 20px;position: absolute;height: 65%;width: 65%;opacity:.25;"></div>
+            <div style="background: #e2c391;width: 25%;height: 90%;position: absolute;bottom: -20px;right: -35px;opacity: 85%;z-index: 0 !important;"></div>
+            <div class="position-relative z-1">
+                <?php echo wp_get_attachment_image($image['id'],'full', '',['class'=>'w-100 h-auto img-bg','style'=>'object-fit:contain;top:0;left:0;']); ?>
+            </div>
+            </div>
+        </div>
+
+
+
+    </div>
+</div>
+
+
+<!-- <div class="position-absolute bg-black w-100 h-100" style="opacity:.35;top:0;left:0;pointer-events:none;"></div> -->
+<!-- <div class="container">
+<div class="row justify-content-center">
+<div class="col col-md-10 p-5" data-aos="<?php echo $dataAos; ?>" data-aos-delay="200" style="background:<?php echo $background; ?>">
+<div class="h4 text-white" style="margin-bottom:-1rem;">
+<?php echo $content; ?>
+</div>
+</div>
+</div>
+</div> -->
 </section>
-<!-- end of team members -->
-<?php endif; ?>
 
-<?php get_footer(); ?>
+<?php 
+endwhile; 
+endif;
+
+
+if(have_rows('sections')): ?>
+<div class="position-fixed side-navbar" style="top:25%;right:25px;transform:translate(0, 50%);z-index:2;">
+<ul class="list-unstyled text-right mr-md-4 mr-0">
+<?php while(have_rows('sections')): the_row();
+$label = get_sub_field('label');
+$section = sanitize_title_with_dashes($label);
+$rowIndex=get_row_index();
+// if($rowIndex == '1'){}
+?>
+<li id="anchor-section-<?php echo $section; ?>" class="mt-2 mb-2 position-relative">
+<a href="#section-<?php echo $section; ?>" class="pl-md-5 pl-2 pr-2 text-white position-relative h5">
+<?php echo $label; ?>
+</a>
+</li>
+
+<?php endwhile; ?>
+</ul>
+</div>
+<?php endif;
+
+wp_enqueue_script('about-js', get_theme_file_uri('/js/about.js'));
+
+get_footer(); ?>

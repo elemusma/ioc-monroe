@@ -107,10 +107,7 @@ echo '<section class="position-relative bg-attachment" style="padding-top:75px;p
 
 echo wp_get_attachment_image($bgImg['id'],'full','',['class'=>'position-absolute w-100 h-100','style'=>'top:0;left:0;']);
 
-// echo '<div class="position-absolute w-100 h-100 bg-accent" style="mix-blend-mode:multiply;top:0;"></div>';
-
 echo '<div class="position-relative pt-5 pb-5">';
-// echo '<div class="position-absolute w-100 h-100" style="mix-blend-mode:screen;opacity:.62;top:0;left:0;pointer-events:none;background:#0f2849;"></div>';
 echo '<div class="container">';
 echo '<div class="row justify-content-center">';
 echo '<div class="col-lg-10 text-center text-white pb-5">';
@@ -139,8 +136,6 @@ echo '</a>';
 
 echo '<div class="w-100 position-relative" style="height:250px;">';
 echo '<span class="h1 pb-5 d-inline-block blair-light">' . str_pad($counter, 2, '0', STR_PAD_LEFT) . '</span>';
-
-// echo '<h3 class="mb-0 pb-4 h4" style="border-bottom:10px solid var(--accent-quinary);"><a href="' . get_the_permalink() . '">' . get_the_title() . '</a></h3>';
 
 echo '<div class="container position-absolute" style="bottom:0;">';
 

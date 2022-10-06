@@ -1,0 +1,152 @@
+/* start of general */
+.full-height:nth-child(odd) {
+    /* background: rgb(31, 61, 124);
+    background: linear-gradient(0deg,
+            rgba(31, 61, 124, 1) 0%,
+            rgba(122, 155, 73, 1) 100%); */
+    background: rgb(252, 176, 64);
+    background: linear-gradient(180deg, rgba(252, 176, 64, 1) 0%, rgba(0, 53, 146, 1) 100%);
+}
+
+.full-height:nth-child(even) {
+    /* background: rgb(31, 61, 124);
+    background: linear-gradient(180deg,
+            rgba(31, 61, 124, 1) 0%,
+            rgba(122, 155, 73, 1) 100%); */
+    background: rgb(252, 176, 64);
+    background: linear-gradient(0deg, rgba(252, 176, 64, 1) 0%, rgba(0, 53, 146, 1) 100%);
+}
+
+@media screen and (min-width: 768px) {
+    /* #section-purist-foods .second p,#section-purist-foods .third p,#section-1960 .second p,#section-1970 .second p,#section-1980 .second p,#section-1990 .second p,#section-2000 .second p{
+          opacity:0;
+      } */
+    /* #section-1904 .col {
+          top: 0%;
+          position: relative;
+          transform: translate(0, -60%);
+      }
+      #section-1930s .col {
+          transform: translate(0, 80%);
+      }
+      #section-1935 img {
+          object-fit: contain;
+          object-position: 80%;
+          background: wheat;
+      }
+      #section-1935 .col {
+          max-width: 60%;
+          margin-left: -55%;
+      }
+      #section-1946 img {
+          object-fit: contain;
+          object-position: left;
+          background: #e4dfd0;
+      }
+      #section-1946 .col {
+          max-width: 55%;
+          margin-right: -30%;
+      }
+      #section-1957 .col {
+          max-width: 60%;
+          margin-top: -29%;
+      }
+      #section-1960s .col {
+          max-width: 50%;
+          margin-left: -50%;
+      }
+      #section-customer-service .col {
+          max-width: 50%;
+          margin-left: -70%;
+      }
+      #section-reputation .col {
+          max-width: 40%;
+          margin-left: -75%;
+      } */
+}
+
+@media screen and (max-width: 767px) {
+    .side-navbar {
+        top: unset !important;
+        bottom: 0;
+        right: 0 !important;
+        transform: translate(0, 0) !important;
+    }
+
+    .side-navbar ul {
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .col p {
+        font-size: 24px;
+        line-height: 1.5;
+    }
+
+    li.active {
+        margin-right: 25px;
+    }
+}
+
+/* end of general */
+
+/* .active img {
+    position: fixed !important;
+    top: 0;
+  } */
+/* .side-navbar li.active{
+      background:white;
+  } */
+.side-navbar li a {
+    text-shadow: 2px 1px black;
+}
+
+.side-navbar li.active a {
+    background: white;
+    color: #374a7b !important;
+    -webkit-text-stroke: 1px;
+    margin-right: 10px;
+    font-size: 24px;
+    text-shadow: none;
+}
+
+.side-navbar li:after {
+    content: "";
+    background: #d2b572;
+    height: 100%;
+    width: 2px;
+    position: absolute;
+    top: 0;
+    right: 0;
+}
+
+.side-navbar li.active:after {
+    background: #a7a6a2;
+}
+
+li.active a:after {
+    content: "";
+    background: url("/wp-content/uploads/2021/07/Arrow-Left-Blair-ITC.png");
+    background-size: contain;
+    background-repeat: no-repeat;
+    width: 25px;
+    height: 100%;
+    position: absolute;
+    right: -45px;
+    top: 0;
+}
+
+/* .side-navbar li.active a{
+      color:;
+  } */
+/* .not-at-top{
+      background-attachment:unset!important;
+  } */
+/* #section-1904 p {
+      font-weight: 900;
+      font-size: 3.5em;
+  } */
+/* #section-1904 p .letter {
+      display: inline-block;
+      line-height: 1em;
+  } */
