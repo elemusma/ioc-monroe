@@ -7,8 +7,8 @@ namespace Composer\Autoload;
 class ComposerStaticInitcaa25cd4a92d0c39cf3c0119a8c1a373
 {
     public static $files = array (
-        '41c664bd04a95c2d6a2f2a3e00f06593' => __DIR__ . '/..' . '/publishpress/wordpress-reviews/ReviewsController.php',
         '0078757fbd019a5f202f2be6585c3626' => __DIR__ . '/..' . '/publishpress/wordpress-banners/BannersMain.php',
+        '41c664bd04a95c2d6a2f2a3e00f06593' => __DIR__ . '/..' . '/publishpress/wordpress-reviews/ReviewsController.php',
     );
 
     public static $prefixLengthsPsr4 = array (

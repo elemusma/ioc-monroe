@@ -8,8 +8,16 @@
 //  echo '<br>';
 //  echo 'new test';
 
+// echo '<div style="position:fixed; right: 3px;top:0;z-index:20; background: black;color:white">';
+// echo 'Scroll Direction :';
+// echo '<span id="direction"></span>';
+// echo '</div>';
+
  //  start of header
- echo '<section class="bg-attachment position-relative d-flex align-items-end justify-content-center hero-content" style="background:url(' . get_the_post_thumbnail_url() . ');background-size:cover;background-attachment:fixed;background-position:top;padding-bottom:15px;height:87vh;">';
+ echo '<section class="bg-attachment position-relative d-flex align-items-end justify-content-center hero-content overflow-h" style="padding-bottom:15px;height:87vh;">';
+//  echo '<section class="bg-attachment position-relative d-flex align-items-end justify-content-center hero-content" style="background:url(' . get_the_post_thumbnail_url() . ');background-size:cover;background-attachment:fixed;background-position:top;padding-bottom:15px;height:87vh;">';
+
+ the_post_thumbnail('full',array('class'=>'position-absolute w-100 img-parallax-custom','style'=>'top:0;left:0;object-fit:cover;object-position:top;height:106%;'));
  
  echo '<div class="position-absolute w-100 h-100" style="top:0;left:0;background: rgb(255,255,255);
 background: radial-gradient(circle, rgba(255,255,255,0) 0%, rgba(75,113,255,1) 70%);mix-blend-mode:multiply;"></div>';

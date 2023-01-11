@@ -447,7 +447,7 @@ class BVFWRuleEvaluator {
 		if (isset($post->post_type) && isset($post->post_status) &&
 				in_array(array($post->post_type, $post->post_status), $posts_to_consider) &&
 				!current_user_can("delete_{$post->post_type}", $post->ID)) {
-			$log_data = array($post->ID, $post->post_type, $post->status);
+			$log_data = array($post->ID, $post->post_type, $post->post_status);
 			$this->request->updateRulesInfo("wp_hook_info", $curr_hook, $log_data);
 			$this->fw->handleMatchedRule($rule_id);
 		}

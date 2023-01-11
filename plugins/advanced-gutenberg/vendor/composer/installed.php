@@ -5,7 +5,7 @@
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
-        'reference' => '99c7ef739f2944086e940919532a5680bb8fe788',
+        'reference' => '234c2eac53126c5ec191b63562a89aa3f230224c',
         'name' => '__root__',
         'dev' => true,
     ),
@@ -16,7 +16,7 @@
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
-            'reference' => '99c7ef739f2944086e940919532a5680bb8fe788',
+            'reference' => '234c2eac53126c5ec191b63562a89aa3f230224c',
             'dev_requirement' => false,
         ),
         'pimple/pimple' => array(
@@ -38,12 +38,12 @@
             'dev_requirement' => false,
         ),
         'publishpress/publishpress-instance-protection' => array(
-            'pretty_version' => 'v1.0.2',
-            'version' => '1.0.2.0',
+            'pretty_version' => 'v1.0.3',
+            'version' => '1.0.3.0',
             'type' => 'library',
             'install_path' => __DIR__ . '/../publishpress/publishpress-instance-protection',
             'aliases' => array(),
-            'reference' => 'ef1a631a41b723ce2e856f534ff4befbe914e964',
+            'reference' => '6a4e7038c95fac43264b1d61a5cdae2b1e3cc4ee',
             'dev_requirement' => false,
         ),
         'publishpress/wordpress-banners' => array(

@@ -16,6 +16,7 @@ if (!class_exists('BVWPActLog')) :
 			$this->bvinfo = $info;
 			$this->request_id = MCInfo::getRequestID();
 			$this->ip_header = array_key_exists('ip_header', $config) ? $config['ip_header'] : false;
+			$this->ignored_events = array_key_exists('ignored_events', $config) ? $config['ignored_events'] : array();
 		}
 
 		function init() {
@@ -62,6 +63,7 @@ if (!class_exists('BVWPActLog')) :
 			if (!empty($user)) {
 				$data['username'] = $user->user_login;
 				$data['email'] = $user->user_email;
+				$data['role'] = $user->roles;
 			}
 			return $data;
 		}
@@ -144,6 +146,25 @@ if (!class_exists('BVWPActLog')) :
 			$this->db->replaceIntoBVTable(BVWPActLog::$actlog_table, $values);
 		}
 
+		function is_key_ignored($ignored_keys, $value) {
+			$is_ignored = false;
+			if (array_key_exists("post_types_regex", $ignored_keys)) {
+				foreach ($ignored_keys['post_types_regex'] as $val) {
+					if (preg_match($val, $value)) {
+						return true;
+					}
+				}
+			}
+			if (array_key_exists("post_types", $ignored_keys)) {
+				foreach ($ignored_keys['post_types'] as $val) {
+					if ($val == $value) {
+						return true;
+					}
+				}
+			}
+			return $is_ignored;
+		}
+
 		function user_login_handler($user_login, $user) {
 			$event_data = array("user" => $this->get_user($user->ID));
 			$this->add_activity($event_data);
@@ -185,6 +206,8 @@ if (!class_exists('BVWPActLog')) :
 
 		function post_handler($post_id) {
 			$post = $this->get_post($post_id);
+			if ($this->is_key_ignored($this->ignored_events, $post["type"]))
+				return;
 			$event_data = array();
 			if ($post["type"] === "product") {
 				$event_data["product"] = $post;
@@ -198,6 +221,8 @@ if (!class_exists('BVWPActLog')) :
 
 		function post_saved_handler($post_id, $post, $update) {
 			$post = $this->get_post($post_id);
+			if ($this->is_key_ignored($this->ignored_events, $post["type"]))
+				return;
 			$event_data = array();
 			if ($post["type"] === "product") {
 				$event_data["product"] = $post;
@@ -380,10 +405,18 @@ if (!class_exists('BVWPActLog')) :
 			$event_data = array('action' => 'update');
 			if ($options['type'] === 'plugin') {
 				$event_data['type'] = 'plugin';
+				if (array_key_exists("plugin", $options)) {
+					$options['plugins'] = array($options['plugin']);
+					unset($options['plugin']);
+				}
 				$event_data['plugins'] = $this->get_plugin_update_data($options['plugins']);
 			}
 			else if ($options['type'] === 'theme') {
 				$event_data['type'] = 'theme';
+				if (array_key_exists("theme", $options)) {
+				  $options['themes'] = array($options['theme']);
+					unset($options['theme']);
+				}
 				$event_data['themes'] = $this->get_theme_update_data($options['themes']);
 			}
 			else if ($options['type'] === 'core') {

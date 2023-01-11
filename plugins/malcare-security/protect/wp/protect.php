@@ -61,7 +61,10 @@ class BVProtect {
 				register_shutdown_function(array($fw, 'log'));
 
 				$fw->execute();
+			} elseif ($fw->isGeoBlocking()) {
+				$fw->blockIfBlacklisted();
 			}
+
 			$fw->executeRules();
 		}
 

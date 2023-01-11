@@ -75,8 +75,9 @@ class BVFW {
 	public static function getInstance($logger, $confHash, $ip, $bvinfo, $ipstore, $ruleSet) {
 		if (!isset(self::$instance)) {
 			self::$instance = new BVFW($logger, $confHash, $ip, $bvinfo, $ipstore, $ruleSet);
+		} else {
+			self::$instance->ipstore = $ipstore;
 		}
-
 		return self::$instance;
 	}
 
@@ -155,6 +156,11 @@ class BVFW {
 	public function isActive() {
 		return $this->config->isActive();
 	}
+
+	public function isGeoBlocking() {
+		return $this->config->isGeoBlocking;
+	}
+
 	public function canSetAdminCookie() {
 		return ($this->config->adminCookieMode === BVFWConfig::ADMIN_COOKIE_MODE_ENABLED);
 	}
@@ -247,6 +253,14 @@ class BVFW {
 		return true;
 	}
 
+	public function blockIfBlacklisted() {
+		if (!$this->canBypassFirewall() && $this->config->isProtecting()) {
+			if ($this->isBlacklistedIP()) {
+				$this->terminateRequest(BVWPRequest::BLACKLISTED);
+			}
+		}
+	}
+
 	public function execute() {
 		if ($this->config->canProfileReqInfo()) {
 			$result = array();
@@ -266,12 +280,7 @@ class BVFW {
 			$result += $this->profileRequestInfo($cookies, true, 'COOKIES[');
 			$this->request->updateReqInfo($result);
 		}
-
-		if (!$this->canBypassFirewall() && $this->config->isProtecting()) {
-			if ($this->isBlacklistedIP()) {
-				$this->terminateRequest(BVWPRequest::BLACKLISTED);
-			}
-		}
+		$this->blockIfBlacklisted();
 	}
 
 	public function canExecuteRules() {

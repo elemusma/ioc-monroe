@@ -11,9 +11,9 @@ class MCWPSiteInfo {
 			return get_bloginfo('wpurl');
 	}
 
-	public function siteurl() {
+	public function siteurl($path = '', $scheme = null) {
 		if (function_exists('site_url')) {
-			return site_url();
+			return site_url($path, $scheme);
 		} else {
 			return get_bloginfo('wpurl');
 		}

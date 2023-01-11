@@ -345,6 +345,10 @@ class Breeze_Minify {
 	 * Remove '/' chacracter of end url
 	 */
 	public function rtrim_urls( $url ) {
+		if ( ! is_string( $url ) ) {
+			$url = '';
+		}
+
 		return rtrim( $url, '/' );
 	}
 

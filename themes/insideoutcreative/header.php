@@ -46,19 +46,19 @@ echo '</div>';
 ?>
 <a id="navToggle" class="nav-toggle ml-4 d-flex">
 <div style="margin:0px 4px;">
-<div class="line-1"></div>
-<div class="line-2"></div>
-<div class="line-3"></div>
+<div class="line-1 bg-accent"></div>
+<div class="line-2 bg-accent-secondary"></div>
+<div class="line-3 bg-accent"></div>
 </div>
 <div style="margin:0px 4px;">
-<div class="line-1"></div>
-<div class="line-2"></div>
-<div class="line-3"></div>
+<div class="line-1 bg-accent-secondary"></div>
+<div class="line-2 bg-accent"></div>
+<div class="line-3 bg-accent-secondary"></div>
 </div>
 <div style="margin:0px 4px;">
-<div class="line-1"></div>
-<div class="line-2"></div>
-<div class="line-3"></div>
+<div class="line-1 bg-accent"></div>
+<div class="line-2 bg-accent-secondary"></div>
+<div class="line-3 bg-accent"></div>
 </div>
 </a>
 </div>

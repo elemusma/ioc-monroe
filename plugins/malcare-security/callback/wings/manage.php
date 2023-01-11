@@ -40,6 +40,8 @@ class BVManageCallback extends BVCallbackBase {
 		@include_once ABSPATH.'wp-admin/includes/template.php';
 		@include_once ABSPATH.'wp-includes/pluggable.php';
 		@include_once ABSPATH.'wp-admin/includes/class-wp-upgrader.php';
+		@include_once ABSPATH.'wp-admin/includes/class-theme-upgrader.php';
+		@include_once ABSPATH.'wp-admin/includes/class-plugin-upgrader.php';
 		@include_once ABSPATH.'wp-admin/includes/user.php';
 		@include_once ABSPATH.'wp-includes/registration.php';
 		@include_once ABSPATH.'wp-admin/includes/upgrade.php';
@@ -400,7 +402,7 @@ class BVManageCallback extends BVCallbackBase {
 				if (!array_key_exists('plugins', $result))
 					$result["plugins"] = array();
 				$plugin['dest'] = WP_PLUGIN_DIR;
-				$res = $this->installPackage($plugin, $has_bv_skin);
+				$res = $this->installPackage("plugin", $plugin, $has_bv_skin);
 				$pluginName = $plugin['package'];
 				$result["plugins"][$pluginName] = $res;
 			}
@@ -410,7 +412,7 @@ class BVManageCallback extends BVCallbackBase {
 				if (!array_key_exists('themes', $result))
 					$result["themes"] = array();
 				$theme['dest'] = WP_CONTENT_DIR.'/themes';
-				$res = $this->installPackage($theme, $has_bv_skin);
+				$res = $this->installPackage("theme", $theme, $has_bv_skin);
 				$themeName = $theme['package'];
 				$result["themes"][$themeName] = $res;
 			}
@@ -418,7 +420,7 @@ class BVManageCallback extends BVCallbackBase {
 		return $result;
 	}
 
-	function installPackage($params, $has_bv_skin = false) {
+	function installPackage($type, $params, $has_bv_skin = false) {
 		global $wp_filesystem;
 
 		if (!isset($params['package']) || empty($params['package'])) {
@@ -435,21 +437,32 @@ class BVManageCallback extends BVCallbackBase {
 		} else {
 			$skin = new WP_Upgrader_Skin();
 		}	
-		$upgrader = new WP_Upgrader($skin);
+		if ("plugin" === $type) {
+			$upgrader = new Plugin_Upgrader($skin);
+		} elseif ("theme" === $type) {
+			$upgrader = new Theme_Upgrader($skin);
+		} else {
+			$upgrader = new WP_Upgrader($skin);
+		}
 		$upgrader->init();
 		$destination = $params['dest'];
 		$clear_destination = isset($params['cleardest']) ? $params['cleardest'] : false;
 		$package_url = $params['package'];
 		$key = basename($package_url);
+		add_filter('upgrader_source_selection', array($upgrader, 'check_package'));
 		$res = $upgrader->run(
 			array(
 				'package' => $package_url,
 				'destination' => $destination,
 				'clear_destination' => $clear_destination,
 				'clear_working' => true,
-				'hook_extra' => array(),
+				'hook_extra' => array(
+					"type" => $type,
+					"action" => "install"
+				),
 			)
 		);
+		remove_filter('upgrader_source_selection', array($upgrader, 'check_package'));
 		if (is_wp_error($res)) {
 			$res = array('status' => "Error", 'message' => $this->getError($res));
 		} else {

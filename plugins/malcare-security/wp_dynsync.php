@@ -267,6 +267,25 @@ class BVWPDynSync {
 		}
 	}
 
+	function woocommerce_update_order_handler($order_id, $order = null) {
+		$this->add_db_event('wc_orders', array('id' => $order_id));
+		$this->add_db_event('wc_orders_meta', array('order_id' => $order_id));
+		$this->add_db_event('wc_order_addresses', array('order_id' => $order_id));
+		$this->add_db_event('wc_order_operational_data', array('order_id' => $order_id));
+	}
+
+	function woocommerce_trash_order_handler($order_id) {
+		$this->add_db_event('wc_orders', array('id' => $order_id));
+		$this->add_db_event('wc_orders_meta', array('order_id' => $order_id));
+	}
+
+	function woocommerce_delete_order_handler($order_id) {
+		$this->add_db_event('wc_orders', array('id' => $order_id, 'msg_type' => 'delete'));
+		$this->add_db_event('wc_orders_meta', array('order_id' => $order_id, 'msg_type' => 'delete'));
+		$this->add_db_event('wc_order_addresses', array('order_id' => $order_id, 'msg_type' => 'delete'));
+		$this->add_db_event('wc_order_operational_data', array('order_id' => $order_id, 'msg_type' => 'delete'));
+	}
+
 	function woocommerce_new_order_item_handler($item_id, $item, $order_id) {
 		$this->add_db_event('woocommerce_order_items', array('order_item_id' => $item_id));
 		$this->add_db_event('woocommerce_order_itemmeta', array('order_item_id' => $item_id));
@@ -598,6 +617,9 @@ class BVWPDynSync {
 		add_action('update_site_option', array($this, 'sitemeta_handler'), 10, 1);
 
 		/* CAPTURING EVENTS FOR WOOCOMMERCE */
+		add_action('woocommerce_update_order', array($this, 'woocommerce_update_order_handler'), 10, 2);
+		add_action('woocommerce_delete_order', array($this, 'woocommerce_delete_order_handler'), 10, 1);
+		add_action('woocommerce_trash_order', array($this, 'woocommerce_trash_order_handler'), 10, 1);
 		add_action('woocommerce_resume_order', array($this, 'woocommerce_resume_order_handler'), 10, 1);
 		add_action('woocommerce_new_order_item', 	array($this, 'woocommerce_new_order_item_handler'), 10, 3);
 		add_action('woocommerce_update_order_item', array($this, 'woocommerce_update_order_item_handler'), 10, 2);

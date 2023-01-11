@@ -110,7 +110,8 @@ a#navToggle {
     width: 10px;
     margin: 6px auto;
     transition: all .25s ease-in-out;
-    background: #003592;
+    /* background: #003592; */
+    border-radius: 50%;
 }
 
 .nav-toggle div div:hover {

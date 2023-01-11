@@ -1,7 +1,6 @@
 <?php
 defined('ABSPATH') || die;
 
-
 /**
  * Main class of Gutenberg Advanced
  */
@@ -144,8 +143,8 @@ if(!class_exists('AdvancedGutenbergMain')) {
 
             add_action('init', array($this, 'registerPostMeta'));
             add_action('admin_init', array($this, 'registerStylesScripts'));
-            add_action('wp_loaded', array($this, 'blockControlsAddAttributes'), 999);
-            add_filter('rest_pre_dispatch', array( $this, 'blockControlsRemoveAttributes' ), 10, 3);
+            add_action('wp_loaded', ['PublishPress\Blocks\Controls', 'addAttributes'], 999);
+            add_filter('rest_pre_dispatch', ['PublishPress\Blocks\Controls', 'removeAttributes'], 10, 3);
             add_action('wp_enqueue_scripts', array($this, 'registerStylesScriptsFrontend'));
             add_action('enqueue_block_assets', array($this, 'addEditorAndFrontendStyles'), 9999);
             add_action('plugins_loaded', array($this, 'advgbBlockLoader'));
@@ -173,6 +172,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
                 add_filter('mce_buttons_2', array($this, 'addTinyMceButtons'));
                 add_filter('admin_body_class', array($this, 'setAdvgEditorBodyClassses'));
                 add_filter( 'admin_footer_text', [$this, 'adminFooter'] );
+                add_action( 'admin_enqueue_scripts', [$this, 'adminMenuStyles'] );
 
                 if($wp_version >= 5.8) {
                     add_action('admin_enqueue_scripts', array($this, 'addEditorAssetsWidgets'), 9999);
@@ -202,7 +202,8 @@ if(!class_exists('AdvancedGutenbergMain')) {
                 // Front-end
                 add_filter('render_block_data', array($this, 'contentPreRender'));
                 add_filter('render_block', array($this, 'addNonceToFormBlocks'));
-                add_filter('render_block', array($this, 'blockControls'), 10, 2);
+                add_filter('render_block', ['PublishPress\Blocks\Controls', 'checkBlockControls'], 10, 2);
+                add_filter('widget_display_callback', ['PublishPress\Blocks\Controls', 'checkBlockControlsWidget']);
                 add_filter('the_content', array($this, 'addFrontendContentAssets'), 9);
 
                 if($wp_version >= 5.8) {
@@ -435,8 +436,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
         {
             $currentScreen = get_current_screen();
 
-            if(
-                $this->settingIsEnabled('enable_advgb_blocks')
+            if( $this->settingIsEnabled('enable_advgb_blocks')
                 || $this->settingIsEnabled('enable_block_access')
                 || $this->settingIsEnabled('block_controls')
             ) {
@@ -452,15 +452,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
                     $wp_editor_dep = 'wp-editor';
                 }
 
-                if( $this->settingIsEnabled( 'block_controls' ) ) {
-                    wp_enqueue_script(
-                        'advgb_block_controls',
-                        plugins_url('assets/blocks/block-controls.js', dirname(__FILE__)),
-                        array( 'wp-blocks', 'wp-i18n', 'wp-element', 'wp-data', $wp_editor_dep, 'wp-plugins', 'wp-compose' ),
-                        ADVANCED_GUTENBERG_VERSION,
-                        true
-                    );
-                }
+                PublishPress\Blocks\Controls::editorAssets( $wp_editor_dep );
 
                 if( $this->settingIsEnabled( 'enable_advgb_blocks' ) ) {
                     wp_enqueue_script(
@@ -470,6 +462,23 @@ if(!class_exists('AdvancedGutenbergMain')) {
                         ADVANCED_GUTENBERG_VERSION,
                         true
                     );
+
+                    // Pro Ads in some blocks for free version
+                    if( ! defined( 'ADVANCED_GUTENBERG_PRO' ) ) {
+                        wp_enqueue_script(
+                            'advgb_pro_ad_js',
+                            plugins_url( 'assets/blocks/pro-ad.js', dirname( __FILE__ ) ),
+                            ['advgb_blocks'],
+                            ADVANCED_GUTENBERG_VERSION,
+                            true
+                        );
+                        wp_enqueue_style(
+                            'advgb_pro_ad_css',
+                            plugins_url( 'assets/css/pro-ad.css', dirname( __FILE__ ) ),
+                            [],
+                            ADVANCED_GUTENBERG_VERSION
+                        );
+                    }
                 }
 
                 if( $this->settingIsEnabled( 'enable_block_access' ) ) {
@@ -601,7 +610,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
                 'login_logo' => $login_logo,
                 'reg_logo' => $reg_logo,
                 'home_url' => home_url(),
-                'config_url' => admin_url('admin.php?page=advgb_main'),
+                'config_url' => admin_url('admin.php?page=advgb_settings'),
                 'customStyles' => !$custom_styles_data ? array() : $custom_styles_data,
                 'captchaEnabled' => $recaptcha_config['recaptcha_enable'],
                 'pluginUrl' => plugins_url('', ADVANCED_GUTENBERG_PLUGIN),
@@ -622,6 +631,11 @@ if(!class_exists('AdvancedGutenbergMain')) {
             $blocks_config_saved = get_option('advgb_blocks_default_config');
             $blocks_config_saved = $blocks_config_saved !== false ? $blocks_config_saved : array();
             wp_localize_script('wp-blocks', 'advgbDefaultConfig', $blocks_config_saved);
+
+            // Block controls
+            if( $this->settingIsEnabled( 'block_controls' ) ) {
+                PublishPress\Blocks\Controls::editorData();
+            }
 
             // Pro
             if(defined('ADVANCED_GUTENBERG_PRO')) {
@@ -646,15 +660,13 @@ if(!class_exists('AdvancedGutenbergMain')) {
 
             add_action('admin_head', array($this, 'setBlocksSpacingAdmin'));
 
-            wp_enqueue_style('dashicons');
-
             global $pagenow;
 
-            if (
-                is_admin()
+            if ( is_admin()
                 && $this->settingIsEnabled( 'enable_advgb_blocks' )
                 && $pagenow !== 'site-editor.php'
             ) {
+                wp_enqueue_style( 'dashicons' );
                 wp_enqueue_style(
                     'advgb_recent_posts_styles',
                     plugins_url('assets/css/recent-posts.css', dirname(__FILE__)),
@@ -794,6 +806,8 @@ if(!class_exists('AdvancedGutenbergMain')) {
             if (
                 current_user_can( 'install_plugins' )
                 && ! defined( 'ADVANCED_GUTENBERG_PRO' )
+                && class_exists( 'PPVersionNotices\Module\TopNotice\Module' )
+                && class_exists( 'PPVersionNotices\Module\MenuLink\Module' )
             ) {
                 // Top notice
                 add_filter(
@@ -808,6 +822,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
                                 ['base' => 'blocks_page_advgb_block_settings'],
                                 ['base' => 'blocks_page_advgb_custom_styles'],
                                 ['base' => 'blocks_page_advgb_settings'],
+                                ['base' => 'blocks_page_advgb_block_controls'],
                             ]
                         ];
 
@@ -866,49 +881,14 @@ if(!class_exists('AdvancedGutenbergMain')) {
                 $controller = new AdvgbProductsController();
                 $controller->register_routes();
             }
+
+            // Register custom routes for Block controls
+            if ( $this->settingIsEnabled( 'block_controls' )
+                && method_exists( 'PublishPress\Blocks\Controls', 'registerCustomRoutes' )
+            ) {
+                PublishPress\Blocks\Controls::registerCustomRoutes();
+            }
         }
-
-        /**
-         * Add attributes to ServerSideRender blocks to fix "Invalid parameter(s): attributes" error.
-         * As example: 'core/latest-comments'
-         * Related Gutenberg issue: https://github.com/WordPress/gutenberg/issues/16850
-         *
-         * @since 2.14.0
-         */
-        public function blockControlsAddAttributes()
-        {
-            $registered_blocks = WP_Block_Type_Registry::get_instance()->get_all_registered();
-    		foreach ( $registered_blocks as $block ) {
-                $block->attributes['advgbBlockControls'] = array(
-                    'type'    => 'array',
-                    'default' => [],
-                );
-    		}
-        }
-
-        /**
-         * Make sure ServerSideRender blocks are rendererd correctly in editor.
-         * As example: 'core/latest-comments'
-         * https://github.com/brainstormforce/ultimate-addons-for-gutenberg/blob/master/classes/class-uagb-loader.php#L136-L194
-         *
-         * @since 2.14.0
-         */
-        public function blockControlsRemoveAttributes( $result, $server, $request )
-        {
-    		if ( strpos( $request->get_route(), '/wp/v2/block-renderer' ) !== false ) {
-    			if ( isset( $request['attributes'] )
-                    && isset( $request['attributes']['advgbBlockControls'] )
-                ) {
-                    $attributes = $request['attributes'];
-                    if( $attributes['advgbBlockControls'] ) {
-                        unset( $attributes['advgbBlockControls'] );
-                    }
-                    $request['attributes'] = $attributes;
-    			}
-    		}
-
-    		return $result;
-    	}
 
         /**
          * Get post author info for REST API
@@ -1015,7 +995,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
             // Check if we have new blocks installed
             $newBlocks = array_diff($blocksListName, $savedBlocksListName);
             if (count($newBlocks)) {
-                update_option('advgb_blocks_list', $blocksList);
+                update_option('advgb_blocks_list', $blocksList, false);
             }
 
             // Check that advgb_blocks_user_roles is up to date - The result of this check is not saved
@@ -1037,11 +1017,6 @@ if(!class_exists('AdvancedGutenbergMain')) {
                     }
                 }
             }
-
-            /* We don't actually need to save the new blocks that are not detected by Access Blocks
-            if ($newAllowedBlocks) {
-                update_option( 'advgb_blocks_user_roles', $advgb_blocks_user_roles_updated );
-            }*/
 
             if ((defined('GUTENBERG_VERSION')
                 && version_compare(get_option('advgb_gutenberg_version'), GUTENBERG_VERSION, '<'))
@@ -1067,7 +1042,6 @@ if(!class_exists('AdvancedGutenbergMain')) {
                 return false;
             }
             $regex = '/^[a-zA-Z0-9_\-]+$/';
-            $regexWithSpaces = '/^[\p{L}\p{N}_\- ]+$/u';
 
             if (!wp_verify_nonce(sanitize_text_field($_POST['nonce']), 'advgb_cstyles_nonce')) {
                 wp_send_json(__('Invalid nonce token!', 'advanced-gutenberg'), 400);
@@ -1075,7 +1049,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
 
             $check_exist = get_option('advgb_custom_styles');
             if ($check_exist === false) {
-                update_option('advgb_custom_styles', $this::$default_custom_styles);
+                update_option('advgb_custom_styles', $this::$default_custom_styles, false);
             }
 
             $custom_style_data = get_option('advgb_custom_styles');
@@ -1093,7 +1067,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
                     'identifyColor' => '#000000'
                 );
                 array_push($custom_style_data, $new_style_array);
-                update_option('advgb_custom_styles', $custom_style_data);
+                update_option('advgb_custom_styles', $custom_style_data, false);
                 wp_send_json($new_style_array);
             } elseif ($task === 'delete') {
                 $custom_style_data_delete = get_option('advgb_custom_styles');
@@ -1107,7 +1081,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
                     }
                     array_push($new_style_deleted_array, $data);
                 }
-                update_option('advgb_custom_styles', $new_style_deleted_array);
+                update_option('advgb_custom_styles', $new_style_deleted_array, false);
                 if ($done) {
                     wp_send_json(array('id' => $style_id), 200);
                 }
@@ -1130,7 +1104,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
                         array_push($new_style_copied_array, $copied_styles);
                     }
                 }
-                update_option('advgb_custom_styles', $new_style_copied_array);
+                update_option('advgb_custom_styles', $new_style_copied_array, false);
                 wp_send_json($copied_styles);
             } elseif ($task === 'preview') {
                 $style_id = (int)$_POST['id'];
@@ -1151,6 +1125,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
                 }
             } elseif ($task === 'style_save') {
                 $style_id = (int)$_POST['id'];
+                $new_styletitle = sanitize_text_field($_POST['title']);
                 $new_classname = sanitize_text_field($_POST['name']);
                 $new_identify_color = sanitize_hex_color($_POST['mycolor']);
                 $new_css = wp_strip_all_tags($_POST['mycss']);
@@ -1163,30 +1138,14 @@ if(!class_exists('AdvancedGutenbergMain')) {
                 $new_data_array = array();
                 foreach ($data_saved as $data) {
                     if ($data['id'] === $style_id) {
+                        $data['title'] = $new_styletitle;
                         $data['name'] = $new_classname;
                         $data['css'] = $new_css;
                         $data['identifyColor'] = $new_identify_color;
                     }
                     array_push($new_data_array, $data);
                 }
-                update_option('advgb_custom_styles', $new_data_array);
-            } elseif ($task === 'edit') {
-                $new_title = sanitize_text_field($_POST['title']);
-                $style_id = (int)$_POST['id'];
-                if (!preg_match($regexWithSpaces, $new_title)) {
-                    wp_send_json('Please use valid characters for a CSS classname! As example: hyphen or underscore instead of empty spaces.', 403);
-                    return false;
-                }
-                $data_saved = get_option('advgb_custom_styles');
-                $new_data_array = array();
-                foreach ($data_saved as $data) {
-                    if ($data['id'] === $style_id) {
-                        $data['title'] = $new_title;
-                    }
-                    array_push($new_data_array, $data);
-                }
-                update_option('advgb_custom_styles', $new_data_array);
-                wp_send_json(array('title' => $new_title), 200);
+                update_option('advgb_custom_styles', $new_data_array, false);
             } else {
                 wp_send_json(null, 404);
             }
@@ -1213,7 +1172,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
                 wp_send_json( __('Invalid nonce token!', 'advanced-gutenberg'), 400 );
             }
 
-            if( empty( $_POST['feature'] ) || ! $_POST['feature'] ) {
+            if( empty( $_POST['feature'] ) || ! $_POST['feature'] ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
                 wp_send_json( __('Error: wrong data', 'advanced-gutenberg'), 400 );
                 return false;
             }
@@ -1237,7 +1196,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
 
             if( in_array( $feature, $all_features ) ) {
                 $advgb_settings             = get_option( 'advgb_settings' );
-                $advgb_settings[$feature]   = $_POST['new_state'] ? 1 : 0;
+                $advgb_settings[$feature]   = (bool) $_POST['new_state'] ? 1 : 0;
 
                 update_option( 'advgb_settings', $advgb_settings );
                 wp_send_json( true, 200 );
@@ -1304,7 +1263,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
 
             $blocks_config_saved[$blockType] = $settings[$blockType];
 
-            update_option('advgb_blocks_default_config', $blocks_config_saved);
+            update_option('advgb_blocks_default_config', $blocks_config_saved, false);
             wp_send_json(true, 200);
         }
 
@@ -1362,7 +1321,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
 
             array_push($contacts_saved, $contact_data);
 
-            $saved = update_option('advgb_contacts_saved', $contacts_saved);
+            $saved = update_option('advgb_contacts_saved', $contacts_saved, false);
             if ($saved) {
                 $saved_settings = get_option('advgb_email_sender');
                 $website_title  = get_option('blogname');
@@ -1445,7 +1404,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
 
             array_push($newsletter_saved, $newsletter_data);
 
-            update_option('advgb_newsletter_saved', $newsletter_saved);
+            update_option('advgb_newsletter_saved', $newsletter_saved, false);
             wp_send_json($newsletter_data, 200);
             // phpcs:enable
         }
@@ -1515,39 +1474,63 @@ if(!class_exists('AdvancedGutenbergMain')) {
                 // Register CSS
                 wp_register_style(
                     'advgb_admin_styles',
-                    plugins_url('assets/css/style.css', dirname(__FILE__))
+                    plugins_url('assets/css/style.css', dirname(__FILE__)),
+                    [],
+                    ADVANCED_GUTENBERG_VERSION
+                );
+                wp_register_style(
+                    'advgb_admin_menu_styles',
+                    plugins_url('assets/css/admin-menu.css', dirname(__FILE__)),
+                    [],
+                    ADVANCED_GUTENBERG_VERSION
                 );
                 wp_register_style(
                     'advgb_qtip_style',
-                    plugins_url('assets/css/jquery.qtip.css', dirname(__FILE__))
+                    plugins_url('assets/css/jquery.qtip.css', dirname(__FILE__)),
+                    [],
+                    ADVANCED_GUTENBERG_VERSION
                 );
                 wp_register_style(
                     'codemirror_css',
-                    plugins_url('assets/js/codemirror/lib/codemirror.css', dirname(__FILE__))
+                    plugins_url('assets/js/codemirror/lib/codemirror.css', dirname(__FILE__)),
+                    [],
+                    ADVANCED_GUTENBERG_VERSION
                 );
                 wp_register_style(
                     'codemirror_hint_style',
-                    plugins_url('assets/js/codemirror/addon/hint/show-hint.css', dirname(__FILE__))
+                    plugins_url('assets/js/codemirror/addon/hint/show-hint.css', dirname(__FILE__)),
+                    [],
+                    ADVANCED_GUTENBERG_VERSION
                 );
                 wp_register_style(
                     'minicolors_css',
-                    plugins_url('assets/css/jquery.minicolors.css', dirname(__FILE__))
+                    plugins_url('assets/css/jquery.minicolors.css', dirname(__FILE__)),
+                    [],
+                    ADVANCED_GUTENBERG_VERSION
                 );
                 wp_register_style(
                     'material_icon_font',
-                    plugins_url('assets/css/fonts/material-icons.min.css', dirname(__FILE__))
+                    plugins_url('assets/css/fonts/material-icons.min.css', dirname(__FILE__)),
+                    [],
+                    ADVANCED_GUTENBERG_VERSION
                 );
                 wp_register_style(
                     'material_icon_font_custom',
-                    plugins_url('assets/css/fonts/material-icons-custom.min.css', dirname(__FILE__))
+                    plugins_url('assets/css/fonts/material-icons-custom.min.css', dirname(__FILE__)),
+                    [],
+                    ADVANCED_GUTENBERG_VERSION
                 );
                 wp_register_style(
                     'slick_style',
-                    plugins_url('assets/css/slick.css', dirname(__FILE__))
+                    plugins_url('assets/css/slick.css', dirname(__FILE__)),
+                    [],
+                    ADVANCED_GUTENBERG_VERSION
                 );
                 wp_register_style(
                     'slick_theme_style',
-                    plugins_url('assets/css/slick-theme.css', dirname(__FILE__))
+                    plugins_url('assets/css/slick-theme.css', dirname(__FILE__)),
+                    [],
+                    ADVANCED_GUTENBERG_VERSION
                 );
 
                 // Register JS
@@ -1643,13 +1626,6 @@ if(!class_exists('AdvancedGutenbergMain')) {
                     ADVANCED_GUTENBERG_VERSION
                 );
 
-                /*/ Pro
-                if(defined('ADVANCED_GUTENBERG_PRO')) {
-                    if ( method_exists( 'PPB_AdvancedGutenbergPro\Utils\Definitions', 'advgb_pro_register_scripts_admin' ) ) {
-                        PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_register_scripts_admin();
-                    }
-                }*/
-
                 $saved_settings = get_option('advgb_settings');
                 if (isset($saved_settings['editor_width']) && $saved_settings['editor_width']) {
                     wp_add_inline_style(
@@ -1695,7 +1671,9 @@ if(!class_exists('AdvancedGutenbergMain')) {
             );
             wp_register_style(
                 'slick_theme_style',
-                plugins_url('assets/css/slick-theme.css', dirname(__FILE__))
+                plugins_url('assets/css/slick-theme.css', dirname(__FILE__)),
+                ['dashicons'],
+                ADVANCED_GUTENBERG_VERSION
             );
             wp_register_style(
                 'material_icon_font',
@@ -1793,10 +1771,17 @@ if(!class_exists('AdvancedGutenbergMain')) {
                     'enabled' => $this->settingIsEnabled( 'enable_custom_styles' )
                 ],
                 [
+                    'slug' => 'advgb_block_controls',
+                    'title' => esc_html__( 'Block Controls', 'advanced-gutenberg' ),
+                    'callback' => 'loadBlockControlsPage',
+                    'order' => 6,
+                    'enabled' => $this->settingIsEnabled( 'block_controls' )
+                ],
+                [
                     'slug' => 'advgb_settings',
                     'title' => esc_html__( 'Settings', 'advanced-gutenberg' ),
                     'callback' => 'loadSettingsPage',
-                    'order' => 6,
+                    'order' => 7,
                     'enabled' => true
                 ]
             ];
@@ -1811,6 +1796,10 @@ if(!class_exists('AdvancedGutenbergMain')) {
          */
         public function registerMainMenu()
         {
+            if ( ! current_user_can( 'manage_options' ) ) {
+                return false;
+            }
+
             global $submenu;
 
             if ( empty( $GLOBALS['admin_page_hooks']['advgb_main'] ) ) {
@@ -1862,10 +1851,6 @@ if(!class_exists('AdvancedGutenbergMain')) {
                     $submenu_slugs_conditions[] = [ $page['slug'], $page['enabled'] ];
                 }
 
-                /*echo '<pre>';
-                var_dump($submenu_slugs_conditions);
-                echo '</pre>';
-                exit;*/
                 foreach( $submenu['advgb_main'] as $key => $value ) {
                     if( in_array( $submenu['advgb_main'][$key][2], $submenu_slugs ) ) {
                         $slug_ = $submenu['advgb_main'][$key][2];
@@ -1881,7 +1866,6 @@ if(!class_exists('AdvancedGutenbergMain')) {
                         $submenu['advgb_main'][$key][4] = $slug_ . '-menu-item' . $showHide;
                     }
                 }
-                //exit;
             }
         }
 
@@ -2006,20 +1990,19 @@ if(!class_exists('AdvancedGutenbergMain')) {
         {
             // Check users permissions
             if ( ! current_user_can( 'administrator' ) ) {
-                wp_die(
-                    esc_html__(
-                        'This feature is disabled. In order to use, please enable back through Dashboard.',
-                        'advanced-gutenberg'
-                    )
-                );
+                return false;
             }
 
-            // Block accessis disabled
+            // Block access is disabled
             if ( ! $this->settingIsEnabled( 'enable_block_access' ) ) {
                 wp_die(
-                    esc_html__(
-                        'This feature is disabled. In order to use, please enable back through Dashboard.',
-                        'advanced-gutenberg'
+                    sprintf(
+                        esc_html__(
+                            'This feature is disabled. In order to use, please enable back through %sDashboard%s.',
+                            'advanced-gutenberg'
+                        ),
+                        '<a href="' . admin_url( 'admin.php?page=advgb_main' ) . '">',
+                        '</a>'
                     )
                 );
             }
@@ -2043,6 +2026,41 @@ if(!class_exists('AdvancedGutenbergMain')) {
         }
 
         /**
+         * Block controls page
+         *
+         * @since 3.1.0
+         * @return void
+         */
+        public function loadBlockControlsPage()
+        {
+            // Check users permissions
+            if ( ! current_user_can( 'administrator' ) ) {
+                return false;
+            }
+
+            // Block controls is disabled
+            if ( ! $this->settingIsEnabled( 'block_controls' ) ) {
+                wp_die(
+                    sprintf(
+                        esc_html__(
+                            'This feature is disabled. In order to use, please enable back through %sDashboard%s.',
+                            'advanced-gutenberg'
+                        ),
+                        '<a href="' . admin_url( 'admin.php?page=advgb_main' ) . '">',
+                        '</a>'
+                    )
+                );
+            }
+
+            $this->commonAdminPagesAssets();
+
+            // Output blocks through javascript
+            PublishPress\Blocks\Controls::adminData();
+
+            $this->loadPage( 'block-controls' );
+        }
+
+        /**
          * Block settings page
          *
          * @since 3.0.0
@@ -2054,12 +2072,16 @@ if(!class_exists('AdvancedGutenbergMain')) {
                 return false;
             }
 
-            // PublishPress block disabled
+            // PublishPress blocks is disabled
             if ( ! $this->settingIsEnabled( 'enable_advgb_blocks' ) ) {
                 wp_die(
-                    esc_html__(
-                        'This feature is disabled. In order to use, please enable back through Dashboard.',
-                        'advanced-gutenberg'
+                    sprintf(
+                        esc_html__(
+                            'This feature is disabled. In order to use, please enable back through %sDashboard%s.',
+                            'advanced-gutenberg'
+                        ),
+                        '<a href="' . admin_url( 'admin.php?page=advgb_main' ) . '">',
+                        '</a>'
                     )
                 );
             }
@@ -2096,12 +2118,16 @@ if(!class_exists('AdvancedGutenbergMain')) {
                 return false;
             }
 
-            // Custom styles disabled
+            // Custom styles is disabled
             if ( ! $this->settingIsEnabled( 'enable_custom_styles' ) ) {
                 wp_die(
-                    esc_html__(
-                        'This feature is disabled. In order to use, please enable back through Dashboard.',
-                        'advanced-gutenberg'
+                    sprintf(
+                        esc_html__(
+                            'This feature is disabled. In order to use, please enable back through %sDashboard%s.',
+                            'advanced-gutenberg'
+                        ),
+                        '<a href="' . admin_url( 'admin.php?page=advgb_main' ) . '">',
+                        '</a>'
                     )
                 );
             }
@@ -2142,6 +2168,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
                 'blocks_page_advgb_block_settings',
                 'blocks_page_advgb_custom_styles',
                 'blocks_page_advgb_settings',
+                'blocks_page_advgb_block_controls'
             ];
             if( ! in_array( $current_screen->base, $pages ) ) {
                 return $footer;
@@ -2240,6 +2267,17 @@ if(!class_exists('AdvancedGutenbergMain')) {
             }
 
             return $footer;
+        }
+
+        /**
+         * Admin menu styles
+         *
+         * @since 3.1.0
+         * @return void
+         */
+        public function adminMenuStyles()
+        {
+            wp_enqueue_style( 'advgb_admin_menu_styles' );
         }
 
         /**
@@ -2687,6 +2725,18 @@ if(!class_exists('AdvancedGutenbergMain')) {
         }
 
         /**
+         * Save block controls page data
+         * Name is build in registerMainMenu() > $function_name
+         *
+         * @since 3.1.0
+         * @return boolean true on success, false on failure
+         */
+        public function advgb_block_controls_save_page()
+        {
+            PublishPress\Blocks\Controls::save();
+        }
+
+        /**
          * Redirect after saving custom styles page data
          * Name is build in registerMainMenu() > $function_name
          *
@@ -2832,7 +2882,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
                 $user_role          = sanitize_text_field( $_POST['user_role'] );
                 $blocks_list        = array_map(
                     'sanitize_text_field',
-                    json_decode( stripslashes( $_POST['blocks_list'] ) )
+                    json_decode( stripslashes( $_POST['blocks_list'] ) ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
                 );
                 $active_blocks      = array_map( 'sanitize_text_field', $_POST['active_blocks'] );
                 $inactive_blocks    = array_values( array_diff( $blocks_list, $active_blocks ) );
@@ -2842,7 +2892,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
                 $block_feature_by_role[$user_role]['active_blocks']     = isset( $active_blocks ) ? $active_blocks : '';
                 $block_feature_by_role[$user_role]['inactive_blocks']   = isset( $inactive_blocks ) ? $inactive_blocks : '';
 
-                update_option( $option, $block_feature_by_role );
+                update_option( $option, $block_feature_by_role, false );
 
                 // Redirect with success message
                 wp_safe_redirect(
@@ -2851,7 +2901,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
                             'user_role' =>  $user_role,
                             'save' => 'success'
                         ],
-                        str_replace( '/wp-admin/', '', $_POST['_wp_http_referer'] )
+                        wp_get_referer()
                     )
                 );
             } else {
@@ -2862,7 +2912,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
                             'user_role' =>  $user_role,
                             'save' => 'error'
                         ],
-                        str_replace( '/wp-admin/', '', $_POST['_wp_http_referer'] )
+                        wp_get_referer()
                     )
                 );
             }
@@ -2892,10 +2942,11 @@ if(!class_exists('AdvancedGutenbergMain')) {
          * @since 3.0.0
          * @param string $feature   The object name to store the active/inactive blocks - e.g. 'access' => advgbCUserRole.access
          * @param string $option    Database option to check current user role's active/inactive blocks - e.g. 'advgb_blocks_user_roles'
+         * @param array $exclude    Blocks to exclude from appearing in the feature form (is different to inactive_blocks!). e.g. ['core/paragraph','core/list']
          *
          * @return void
          */
-        public function blocksFeatureData( $feature, $option )
+        public function blocksFeatureData( $feature, $option, $exclude = [] )
         {
             // Build blocks form and add filters functions
             wp_add_inline_script(
@@ -2904,7 +2955,8 @@ if(!class_exists('AdvancedGutenbergMain')) {
                     advgbGetBlocksFeature(
                         advgbCUserRole.{$feature}.inactive_blocks,
                         '#advgb_block_{$feature}_nonce_field',
-                        'advgb_block_{$feature}'
+                        'advgb_block_{$feature}',
+                        " . wp_json_encode( $exclude ) . "
                     );
                 });"
             );
@@ -3036,9 +3088,10 @@ if(!class_exists('AdvancedGutenbergMain')) {
                         <div class="advgb-roles-wrapper">
                             <?php
                             // Get current page slug
-                            if ( isset( $_GET['page'] ) && $_GET['page'] ) {
+                            if ( isset( $_GET['page'] ) && $_GET['page'] ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+                                $page_ = sanitize_text_field( $_GET['page'] );
                                 ?>
-                                <input type="hidden" name="advgb_page_slug" id="advgb_page_slug" value="<?php esc_attr_e( $_GET['page'] ) ?>" />
+                                <input type="hidden" name="advgb_page_slug" id="advgb_page_slug" value="<?php esc_attr_e( $page_ ) ?>" />
                             <?php } ?>
                             <input type="hidden" name="advgb_feature" id="advgb_feature" value="<?php echo $feature ?>" />
                             <div>
@@ -3282,7 +3335,8 @@ if(!class_exists('AdvancedGutenbergMain')) {
                         /* Remove from inactive blocks if is saved for the current user role.
                          * The lines below won't save nothing in db, is just for execution on editor. */
                         foreach ($advgb_blocks_user_roles['inactive_blocks'] as $key => $type) {
-                            if (in_array('core/legacy-widget', $advgb_blocks_user_roles['inactive_blocks'])) {
+                            // Fix by @igrginov - https://github.com/publishpress/PublishPress-Blocks/issues/1084
+                            if ($type === 'core/legacy-widget') {
                                 unset($advgb_blocks_user_roles['inactive_blocks'][$key]);
                             }
                         }
@@ -3391,2133 +3445,7 @@ if(!class_exists('AdvancedGutenbergMain')) {
                 ADVANCED_GUTENBERG_VERSION
             );
 
-            $blocks_settings_list = array(
-                'advgb-accordions' => array(
-                    array(
-                        'label'    => __('Accordion Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Bottom spacing', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'marginBottom',
-                                'min'   => 0,
-                                'max'   => 50,
-                            ),
-                            array(
-                                'title' => __('Initial Collapsed', 'advanced-gutenberg'),
-                                'type'  => 'checkbox',
-                                'name'  => 'collapsedAll',
-                            ),
-                        )
-                    ),
-                    array(
-                        'label'    => __('Header Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Background Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'headerBgColor',
-                            ),
-                            array(
-                                'title' => __('Text Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'headerTextColor'
-                            ),
-                            array(
-                                'title'   => __('Header Icon', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'headerIcon',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Plus', 'advanced-gutenberg'),
-                                        'value' => 'plus',
-                                    ),
-                                    array(
-                                        'label' => __('Plus Circle', 'advanced-gutenberg'),
-                                        'value' => 'plusCircle',
-                                    ),
-                                    array(
-                                        'label' => __('Plus Circle Outline', 'advanced-gutenberg'),
-                                        'value' => 'plusCircleOutline',
-                                    ),
-                                    array(
-                                        'label' => __('Plus Square Outline', 'advanced-gutenberg'),
-                                        'value' => 'plusBox',
-                                    ),
-                                    array(
-                                        'label' => __('Unfold Arrow', 'advanced-gutenberg'),
-                                        'value' => 'unfold',
-                                    ),
-                                    array(
-                                        'label' => __('Horizontal Dots', 'advanced-gutenberg'),
-                                        'value' => 'threeDots',
-                                    ),
-                                    array(
-                                        'label' => __('Arrow Down', 'advanced-gutenberg'),
-                                        'value' => 'arrowDown',
-                                    ),
-                                )
-                            ),
-                            array(
-                                'title' => __('Header Icon Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'headerIconColor',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Body Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Background Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'bodyBgColor',
-                            ),
-                            array(
-                                'title' => __('Text Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'bodyTextColor',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Border Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title'   => __('Border Style', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'borderStyle',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Solid', 'advanced-gutenberg'),
-                                        'value' => 'solid',
-                                    ),
-                                    array(
-                                        'label' => __('Dashed', 'advanced-gutenberg'),
-                                        'value' => 'dashed',
-                                    ),
-                                    array(
-                                        'label' => __('Dotted', 'advanced-gutenberg'),
-                                        'value' => 'dotted',
-                                    ),
-                                )
-                            ),
-                            array(
-                                'title' => __('Border Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'borderColor',
-                            ),
-                            array(
-                                'title' => __('Border Width', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'borderWidth',
-                                'min'   => 1,
-                                'max'   => 10,
-                            ),
-                            array(
-                                'title' => __('Border Radius', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'borderRadius',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-button' => array(
-                    array(
-                        'label'    => __('Text and Color', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Text Size', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'textSize',
-                                'min'   => 10,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Text Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'textColor'
-                            ),
-                            array(
-                                'title' => __('Background Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'bgColor',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Border Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title'   => __('Border Style', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'borderStyle',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Solid', 'advanced-gutenberg'),
-                                        'value' => 'solid',
-                                    ),
-                                    array(
-                                        'label' => __('Dashed', 'advanced-gutenberg'),
-                                        'value' => 'dashed',
-                                    ),
-                                    array(
-                                        'label' => __('Dotted', 'advanced-gutenberg'),
-                                        'value' => 'dotted',
-                                    ),
-                                )
-                            ),
-                            array(
-                                'title' => __('Border Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'borderColor',
-                            ),
-                            array(
-                                'title' => __('Border Width', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'borderWidth',
-                                'min'   => 1,
-                                'max'   => 10,
-                            ),
-                            array(
-                                'title' => __('Border Radius', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'borderRadius',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Margin Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Margin Top', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'marginTop',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin Right', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'marginRight',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin Bottom', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'marginBottom',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin Left', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'marginLeft',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Padding Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Padding Top', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'paddingTop',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding Right', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'paddingRight',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding Bottom', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'paddingBottom',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding Left', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'paddingLeft',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Hover Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Text Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'hoverTextColor'
-                            ),
-                            array(
-                                'title' => __('Background Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'hoverBgColor',
-                            ),
-                            array(
-                                'title' => __('Shadow Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'hoverShadowColor',
-                            ),
-                            array(
-                                'title' => __('Shadow H Offset', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'hoverShadowH',
-                                'min'   => -50,
-                                'max'   => 50,
-                            ),
-                            array(
-                                'title' => __('Shadow V Offset', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'hoverShadowV',
-                                'min'   => -50,
-                                'max'   => 50,
-                            ),
-                            array(
-                                'title' => __('Shadow Blur', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'hoverShadowBlur',
-                                'min'   => 0,
-                                'max'   => 50,
-                            ),
-                            array(
-                                'title' => __('Shadow Spread', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'hoverShadowSpread',
-                                'min'   => 0,
-                                'max'   => 50,
-                            ),
-                            array(
-                                'title' => __('Transition Speed', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'transitionSpeed',
-                                'min'   => 0,
-                                'max'   => 3,
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-image' => array(
-                    array(
-                        'label' =>  __('Click action', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Action on click', 'advanced-gutenberg'),
-                                'type'  => 'select',
-                                'name'  => 'openOnClick',
-                                'options' => array(
-                                    array(
-                                        'label' => __('None', 'advanced-gutenberg'),
-                                        'value' => 'none',
-                                    ),
-                                    array(
-                                        'label' => __('Open image in a lightbox', 'advanced-gutenberg'),
-                                        'value' => 'lightbox',
-                                    ),
-                                    array(
-                                        'label' => __('Open custom URL', 'advanced-gutenberg'),
-                                        'value' => 'url',
-                                    ),
-                                ),
-                            ),
-                            array(
-                                'title' => __('Open link in a new tab', 'advanced-gutenberg'),
-                                'type'  => 'checkbox',
-                                'name'  => 'linkInNewTab',
-                            ),
-                        )
-                    ),
-                    array(
-                        'label'    => __('Image Size', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Full width', 'advanced-gutenberg'),
-                                'type'  => 'checkbox',
-                                'name'  => 'fullWidth',
-                            ),
-                            array(
-                                'title' => __('Height', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'height',
-                                'min'   => 100,
-                                'max'   => 1000,
-                            ),
-                            array(
-                                'title' => __('Width', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'width',
-                                'min'   => 200,
-                                'max'   => 1300,
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Color', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Title Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'titleColor',
-                            ),
-                            array(
-                                'title' => __('Subtitle Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'subtitleColor',
-                            ),
-                            array(
-                                'title' => __('Overlay Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'overlayColor',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Text Alignment', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Vertical Alignment', 'advanced-gutenberg'),
-                                'type'  => 'select',
-                                'name'  => 'vAlign',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Top', 'advanced-gutenberg'),
-                                        'value' => 'flex-start',
-                                    ),
-                                    array(
-                                        'label' => __('Center', 'advanced-gutenberg'),
-                                        'value' => 'center',
-                                    ),
-                                    array(
-                                        'label' => __('Bottom', 'advanced-gutenberg'),
-                                        'value' => 'flex-end',
-                                    ),
-                                ),
-                            ),
-                            array(
-                                'title' => __('Horizontal Alignment', 'advanced-gutenberg'),
-                                'type'  => 'select',
-                                'name'  => 'hAlign',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Left', 'advanced-gutenberg'),
-                                        'value' => 'flex-start',
-                                    ),
-                                    array(
-                                        'label' => __('Center', 'advanced-gutenberg'),
-                                        'value' => 'center',
-                                    ),
-                                    array(
-                                        'label' => __('Right', 'advanced-gutenberg'),
-                                        'value' => 'flex-end',
-                                    ),
-                                ),
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-list' => array(
-                    array(
-                        'label'    => __('Text Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Text Size', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'fontSize',
-                                'min'   => 10,
-                                'max'   => 100,
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Icon Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Icon style', 'advanced-gutenberg'),
-                                'type'  => 'select',
-                                'name'  => 'icon',
-                                'options' => array(
-                                    array(
-                                        'label' => __('None', 'advanced-gutenberg'),
-                                        'value' => '',
-                                    ),
-                                    array(
-                                        'label' => __('Pushpin', 'advanced-gutenberg'),
-                                        'value' => 'admin-post',
-                                    ),
-                                    array(
-                                        'label' => __('Configuration', 'advanced-gutenberg'),
-                                        'value' => 'admin-generic',
-                                    ),
-                                    array(
-                                        'label' => __('Flag', 'advanced-gutenberg'),
-                                        'value' => 'flag',
-                                    ),
-                                    array(
-                                        'label' => __('Star', 'advanced-gutenberg'),
-                                        'value' => 'star-filled',
-                                    ),
-                                    array(
-                                        'label' => __('Checkmark', 'advanced-gutenberg'),
-                                        'value' => 'yes',
-                                    ),
-                                    array(
-                                        'label' => __('Minus', 'advanced-gutenberg'),
-                                        'value' => 'minus',
-                                    ),
-                                    array(
-                                        'label' => __('Plus', 'advanced-gutenberg'),
-                                        'value' => 'plus',
-                                    ),
-                                    array(
-                                        'label' => __('Play', 'advanced-gutenberg'),
-                                        'value' => 'controls-play',
-                                    ),
-                                    array(
-                                        'label' => __('Arrow Right', 'advanced-gutenberg'),
-                                        'value' => 'arrow-right-alt',
-                                    ),
-                                    array(
-                                        'label' => __('X Cross', 'advanced-gutenberg'),
-                                        'value' => 'dismiss',
-                                    ),
-                                    array(
-                                        'label' => __('Warning', 'advanced-gutenberg'),
-                                        'value' => 'warning',
-                                    ),
-                                    array(
-                                        'label' => __('Help', 'advanced-gutenberg'),
-                                        'value' => 'editor-help',
-                                    ),
-                                    array(
-                                        'label' => __('Info', 'advanced-gutenberg'),
-                                        'value' => 'info',
-                                    ),
-                                    array(
-                                        'label' => __('Circle', 'advanced-gutenberg'),
-                                        'value' => 'marker',
-                                    ),
-                                ),
-                            ),
-                            array(
-                                'title' => __('Icon color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'iconColor',
-                            ),
-                            array(
-                                'title' => __('Icon Size', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'iconSize',
-                                'min'   => 10,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Line Height', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'lineHeight',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'margin',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'padding',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-table' => array(
-                    array(
-                        'label'    => __('Table Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Max width', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'maxWidth',
-                                'min'   => 0,
-                                'max'   => 1999,
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-video' => array(
-                    array(
-                        'label'    => __('Video Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Open video in lightbox', 'advanced-gutenberg'),
-                                'type'  => 'checkbox',
-                                'name'  => 'openInLightbox',
-                            ),
-                            array(
-                                'title' => __('Full width', 'advanced-gutenberg'),
-                                'type'  => 'checkbox',
-                                'name'  => 'videoFullWidth'
-                            ),
-                            array(
-                                'title' => __('Video Width', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'videoWidth',
-                                'min'   => 100,
-                                'max'   => 1000,
-                            ),
-                            array(
-                                'title' => __('Video Height', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'videoHeight',
-                                'min'   => 300,
-                                'max'   => 7000,
-                            ),
-                            array(
-                                'title' => __('Overlay color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'overlayColor',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Play Button Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title'   => __('Button Icon', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'playButtonIcon',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Normal', 'advanced-gutenberg'),
-                                        'value' => 'normal',
-                                    ),
-                                    array(
-                                        'label' => __('Filled Circle', 'advanced-gutenberg'),
-                                        'value' => 'circleFill',
-                                    ),
-                                    array(
-                                        'label' => __('Outline Circle', 'advanced-gutenberg'),
-                                        'value' => 'circleOutline',
-                                    ),
-                                    array(
-                                        'label' => __('Video Camera', 'advanced-gutenberg'),
-                                        'value' => 'videoCam',
-                                    ),
-                                    array(
-                                        'label' => __('Filled Square', 'advanced-gutenberg'),
-                                        'value' => 'squareCurved',
-                                    ),
-                                    array(
-                                        'label' => __('Star Sticker', 'advanced-gutenberg'),
-                                        'value' => 'starSticker',
-                                    ),
-                                )
-                            ),
-                            array(
-                                'title' => __('Button Size', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'playButtonSize',
-                                'min'   => 40,
-                                'max'   => 200,
-                            ),
-                            array(
-                                'title' => __('Button Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'playButtonColor',
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-count-up' => array(
-                    array(
-                        'label'    => __('General Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Number of columns', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'columns',
-                                'min'   => 1,
-                                'max'   => 3,
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Color Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Header Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'headerTextColor',
-                            ),
-                            array(
-                                'title' => __('Count Up Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'countUpNumberColor',
-                            ),
-                            array(
-                                'title' => __('Description Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'descTextColor',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Count Up Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Count Up Number Size', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'countUpNumberSize',
-                                'min'   => 10,
-                                'max'   => 100,
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-map' => array(
-                    array(
-                        'label'    => __('Location Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'type'  => 'hidden',
-                                'name'  => 'useLatLng',
-                                'value' => 1,
-                            ),
-                            array(
-                                'title' => __('Latitude', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'lat',
-                                'min'   => 0,
-                                'max'   => 999,
-                            ),
-                            array(
-                                'title' => __('Longitude', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'lng',
-                                'min'   => 0,
-                                'max'   => 999,
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Map Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Zoom Level', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'zoom',
-                                'min'   => 0,
-                                'max'   => 25,
-                            ),
-                            array(
-                                'title' => __('Height', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'height',
-                                'min'   => 300,
-                                'max'   => 1000,
-                            ),
-                            array(
-                                'title' => __('Map style', 'advanced-gutenberg'),
-                                'type'  => 'select',
-                                'name'  => 'mapStyle',
-                                'options' => array(
-                                    array('label' => __('Silver', 'advanced-gutenberg'), 'value' => 'silver'),
-                                    array('label' => __('Retro', 'advanced-gutenberg'), 'value' => 'retro'),
-                                    array('label' => __('Dark', 'advanced-gutenberg'), 'value' => 'dark'),
-                                    array('label' => __('Night', 'advanced-gutenberg'), 'value' => 'night'),
-                                    array('label' => __('Aubergine', 'advanced-gutenberg'), 'value' => 'aubergine'),
-                                    array('label' => __('Custom', 'advanced-gutenberg'), 'value' => 'custom'),
-                                )
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Marker Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Marker Title', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'markerTitle',
-                            ),
-                            array(
-                                'title' => __('Marker Description', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'markerDesc',
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-social-links' => array(
-                    array(
-                        'label'    => __('Icon 1 Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Icon', 'advanced-gutenberg'),
-                                'type'  => 'select',
-                                'name'  => 'icon1.icon',
-                                'options' => array(
-                                    array('label' => __('Blogger', 'advanced-gutenberg'), 'value' => 'blogger'),
-                                    array('label' => __('Facebook', 'advanced-gutenberg'), 'value' => 'facebook'),
-                                    array('label' => __('Flickr', 'advanced-gutenberg'), 'value' => 'flickr'),
-                                    array('label' => __('Google Plus', 'advanced-gutenberg'), 'value' => 'google'),
-                                    array('label' => __('Instagram', 'advanced-gutenberg'), 'value' => 'instagram'),
-                                    array('label' => __('LinkedIn', 'advanced-gutenberg'), 'value' => 'linkedin'),
-                                    array('label' => __('Email', 'advanced-gutenberg'), 'value' => 'mail'),
-                                    array('label' => __('Picasa', 'advanced-gutenberg'), 'value' => 'picasa'),
-                                    array('label' => __('Pinterest', 'advanced-gutenberg'), 'value' => 'pinterest'),
-                                    array('label' => __('Reddit', 'advanced-gutenberg'), 'value' => 'reddit'),
-                                    array('label' => __('Skype', 'advanced-gutenberg'), 'value' => 'skype'),
-                                    array('label' => __('Sound Cloud', 'advanced-gutenberg'), 'value' => 'soundcloud'),
-                                    array('label' => __('Tumblr', 'advanced-gutenberg'), 'value' => 'tumblr'),
-                                    array('label' => __('Twitter', 'advanced-gutenberg'), 'value' => 'twitter'),
-                                    array('label' => __('Vimeo', 'advanced-gutenberg'), 'value' => 'vimeo'),
-                                    array('label' => __('Youtube', 'advanced-gutenberg'), 'value' => 'youtube'),
-                                )
-                            ),
-                            array(
-                                'title' => __('Icon Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'icon1.iconColor',
-                            ),
-                            array(
-                                'title' => __('Icon Link', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'icon1.link',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Icon 2 Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Icon', 'advanced-gutenberg'),
-                                'type'  => 'select',
-                                'name'  => 'icon2.icon',
-                                'options' => array(
-                                    array('label' => __('Blogger', 'advanced-gutenberg'), 'value' => 'blogger'),
-                                    array('label' => __('Facebook', 'advanced-gutenberg'), 'value' => 'facebook'),
-                                    array('label' => __('Flickr', 'advanced-gutenberg'), 'value' => 'flickr'),
-                                    array('label' => __('Google Plus', 'advanced-gutenberg'), 'value' => 'google'),
-                                    array('label' => __('Instagram', 'advanced-gutenberg'), 'value' => 'instagram'),
-                                    array('label' => __('LinkedIn', 'advanced-gutenberg'), 'value' => 'linkedin'),
-                                    array('label' => __('Email', 'advanced-gutenberg'), 'value' => 'mail'),
-                                    array('label' => __('Picasa', 'advanced-gutenberg'), 'value' => 'picasa'),
-                                    array('label' => __('Pinterest', 'advanced-gutenberg'), 'value' => 'pinterest'),
-                                    array('label' => __('Reddit', 'advanced-gutenberg'), 'value' => 'reddit'),
-                                    array('label' => __('Skype', 'advanced-gutenberg'), 'value' => 'skype'),
-                                    array('label' => __('Sound Cloud', 'advanced-gutenberg'), 'value' => 'soundcloud'),
-                                    array('label' => __('Tumblr', 'advanced-gutenberg'), 'value' => 'tumblr'),
-                                    array('label' => __('Twitter', 'advanced-gutenberg'), 'value' => 'twitter'),
-                                    array('label' => __('Vimeo', 'advanced-gutenberg'), 'value' => 'vimeo'),
-                                    array('label' => __('Youtube', 'advanced-gutenberg'), 'value' => 'youtube'),
-                                )
-                            ),
-                            array(
-                                'title' => __('Icon Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'icon2.iconColor',
-                            ),
-                            array(
-                                'title' => __('Icon Link', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'icon2.link',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Icon 3 Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Icon', 'advanced-gutenberg'),
-                                'type'  => 'select',
-                                'name'  => 'icon3.icon',
-                                'options' => array(
-                                    array('label' => __('Blogger', 'advanced-gutenberg'), 'value' => 'blogger'),
-                                    array('label' => __('Facebook', 'advanced-gutenberg'), 'value' => 'facebook'),
-                                    array('label' => __('Flickr', 'advanced-gutenberg'), 'value' => 'flickr'),
-                                    array('label' => __('Google Plus', 'advanced-gutenberg'), 'value' => 'google'),
-                                    array('label' => __('Instagram', 'advanced-gutenberg'), 'value' => 'instagram'),
-                                    array('label' => __('LinkedIn', 'advanced-gutenberg'), 'value' => 'linkedin'),
-                                    array('label' => __('Email', 'advanced-gutenberg'), 'value' => 'mail'),
-                                    array('label' => __('Picasa', 'advanced-gutenberg'), 'value' => 'picasa'),
-                                    array('label' => __('Pinterest', 'advanced-gutenberg'), 'value' => 'pinterest'),
-                                    array('label' => __('Reddit', 'advanced-gutenberg'), 'value' => 'reddit'),
-                                    array('label' => __('Skype', 'advanced-gutenberg'), 'value' => 'skype'),
-                                    array('label' => __('Sound Cloud', 'advanced-gutenberg'), 'value' => 'soundcloud'),
-                                    array('label' => __('Tumblr', 'advanced-gutenberg'), 'value' => 'tumblr'),
-                                    array('label' => __('Twitter', 'advanced-gutenberg'), 'value' => 'twitter'),
-                                    array('label' => __('Vimeo', 'advanced-gutenberg'), 'value' => 'vimeo'),
-                                    array('label' => __('Youtube', 'advanced-gutenberg'), 'value' => 'youtube'),
-                                )
-                            ),
-                            array(
-                                'title' => __('Icon Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'icon3.iconColor',
-                            ),
-                            array(
-                                'title' => __('Icon Link', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'icon3.link',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('General Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Icon Alignment', 'advanced-gutenberg'),
-                                'type'  => 'select',
-                                'name'  => 'align',
-                                'options' => array(
-                                    array('label' => __('Left', 'advanced-gutenberg'), 'value' => 'left'),
-                                    array('label' => __('Center', 'advanced-gutenberg'), 'value' => 'center'),
-                                    array('label' => __('Right', 'advanced-gutenberg'), 'value' => 'right'),
-                                )
-                            ),
-                            array(
-                                'title' => __('Icon Size', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'iconSize',
-                                'min'   => 20,
-                                'max'   => 60,
-                            ),
-                            array(
-                                'title' => __('Icon Space', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'iconSpace',
-                                'min'   => 0,
-                                'max'   => 30,
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-summary' => array(
-                    array(
-                        'label'    => __('General Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Load minimized', 'advanced-gutenberg'),
-                                'type'  => 'checkbox',
-                                'name'  => 'loadMinimized',
-                            ),
-                            array(
-                                'title' => __('Table of Contents header title', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'headerTitle',
-                            ),
-                            array(
-                                'title' => __('Anchor color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'anchorColor',
-                            ),
-                            array(
-                                'title' => __('Table of Contents Alignment', 'advanced-gutenberg'),
-                                'type'  => 'select',
-                                'name'  => 'align',
-                                'options' => array(
-                                    array('label' => __('Left', 'advanced-gutenberg'), 'value' => 'left'),
-                                    array('label' => __('Center', 'advanced-gutenberg'), 'value' => 'center'),
-                                    array('label' => __('Right', 'advanced-gutenberg'), 'value' => 'right'),
-                                )
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-adv-tabs' => array(
-                    array(
-                        'label'    => __('Tab Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Tabs Style', 'advanced-gutenberg'),
-                                'type' => 'select',
-                                'name' => 'tabsStyle',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Horizontal', 'advanced-gutenberg'),
-                                        'value' => 'horz',
-                                    ),
-                                    array(
-                                        'label' => __('Vertical', 'advanced-gutenberg'),
-                                        'value' => 'vert',
-                                    ),
-                                )
-                            ),
-                            array(
-                                'title' => __('Background Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'headerBgColor',
-                            ),
-                            array(
-                                'title' => __('Text Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'headerTextColor',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Active Tab Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Background Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'activeTabBgColor',
-                            ),
-                            array(
-                                'title' => __('Text Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'activeTabTextColor',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Body Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Background Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'bodyBgColor',
-                            ),
-                            array(
-                                'title' => __('Text Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'bodyTextColor',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Border Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Border Style', 'advanced-gutenberg'),
-                                'type'  => 'select',
-                                'name'  => 'borderStyle',
-                                'options' => array(
-                                    array('label' => __('Solid', 'advanced-gutenberg'), 'value' => 'solid'),
-                                    array('label' => __('Dashed', 'advanced-gutenberg'), 'value' => 'dashed'),
-                                    array('label' => __('Dotted', 'advanced-gutenberg'), 'value' => 'dotted'),
-                                )
-                            ),
-                            array(
-                                'title' => __('Border Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'borderColor',
-                            ),
-                            array(
-                                'title' => __('Border Width', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'borderWidth',
-                                'min'   => 1,
-                                'max'   => 10,
-                            ),
-                            array(
-                                'title' => __('Border Radius', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'borderRadius',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-testimonial' => array(
-                    array(
-                        'label'    => __('General Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Columns', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'columns',
-                                'min'   => 1,
-                                'max'   => 3,
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Avatar Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Background Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'avatarColor',
-                            ),
-                            array(
-                                'title' => __('Border Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'avatarBorderColor',
-                            ),
-                            array(
-                                'title' => __('Border Radius (%)', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'avatarBorderRadius',
-                                'min'   => 0,
-                                'max'   => 50,
-                            ),
-                            array(
-                                'title' => __('Border Width', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'avatarBorderWidth',
-                                'min'   => 0,
-                                'max'   => 5,
-                            ),
-                            array(
-                                'title' => __('Avatar Size', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'avatarSize',
-                                'min'   => 50,
-                                'max'   => 130,
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Text Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Name Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'nameColor',
-                            ),
-                            array(
-                                'title' => __('Position Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'positionColor',
-                            ),
-                            array(
-                                'title' => __('Description Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'descColor',
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-woo-products' => array(
-                    array(
-                        'label'    => __('Layout Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Columns', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'columns',
-                                'min'   => 1,
-                                'max'   => 4,
-                            ),
-                            array(
-                                'title' => __('Number of Products', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'numberOfProducts',
-                                'min'   => 1,
-                                'max'   => 48,
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-contact-form' => array(
-                    array(
-                        'label'    => __('Text Label', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Name placeholder', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'nameLabel',
-                            ),
-                            array(
-                                'title' => __('Email placeholder', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'emailLabel',
-                            ),
-                            array(
-                                'title' => __('Message placeholder', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'msgLabel',
-                            ),
-                            array(
-                                'title' => __('Submit label', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'submitLabel',
-                            ),
-                            array(
-                                'title' => __('Success text', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'successLabel',
-                            ),
-                            array(
-                                'title' => __('Error text', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'alertLabel',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Input Color', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Background Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'bgColor',
-                            ),
-                            array(
-                                'title' => __('Text Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'textColor',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Border Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Border Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'borderColor',
-                            ),
-                            array(
-                                'title'   => __('Border Style', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'borderStyle',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Solid', 'advanced-gutenberg'),
-                                        'value' => 'solid',
-                                    ),
-                                    array(
-                                        'label' => __('Dashed', 'advanced-gutenberg'),
-                                        'value' => 'dashed',
-                                    ),
-                                    array(
-                                        'label' => __('Dotted', 'advanced-gutenberg'),
-                                        'value' => 'dotted',
-                                    ),
-                                ),
-                            ),
-                            array(
-                                'title' => __('Border Radius', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'borderRadius',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Submit Button Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Border and Text Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'submitColor',
-                            ),
-                            array(
-                                'title' => __('Background Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'submitBgColor',
-                            ),
-                            array(
-                                'title' => __('Border Radius', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'submitRadius',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title'   => __('Button Position', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'submitPosition',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Center', 'advanced-gutenberg'),
-                                        'value' => 'center',
-                                    ),
-                                    array(
-                                        'label' => __('Left', 'advanced-gutenberg'),
-                                        'value' => 'left',
-                                    ),
-                                    array(
-                                        'label' => __('Right', 'advanced-gutenberg'),
-                                        'value' => 'right',
-                                    ),
-                                ),
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-newsletter' => array(
-                    array(
-                        'label'    => __('Form Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title'   => __('Form style', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'formStyle',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Normal', 'advanced-gutenberg'),
-                                        'value' => 'default',
-                                    ),
-                                    array(
-                                        'label' => __('Alternative', 'advanced-gutenberg'),
-                                        'value' => 'alt',
-                                    ),
-                                ),
-                            ),
-                            array(
-                                'title' => __('Form width', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'formWidth',
-                                'min'   => 200,
-                                'max'   => 1000,
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Text Label', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('First Name placeholder', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'fnameLabel',
-                            ),
-                            array(
-                                'title' => __('Last Name placeholder', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'lnameLabel',
-                            ),
-                            array(
-                                'title' => __('Email placeholder', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'emailLabel',
-                            ),
-                            array(
-                                'title' => __('Submit label', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'submitLabel',
-                            ),
-                            array(
-                                'title' => __('Success text', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'successLabel',
-                            ),
-                            array(
-                                'title' => __('Error text', 'advanced-gutenberg'),
-                                'type'  => 'text',
-                                'name'  => 'alertLabel',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Input Color', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Background Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'bgColor',
-                            ),
-                            array(
-                                'title' => __('Text Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'textColor',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Border Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Border Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'borderColor',
-                            ),
-                            array(
-                                'title'   => __('Border Style', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'borderStyle',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Solid', 'advanced-gutenberg'),
-                                        'value' => 'solid',
-                                    ),
-                                    array(
-                                        'label' => __('Dashed', 'advanced-gutenberg'),
-                                        'value' => 'dashed',
-                                    ),
-                                    array(
-                                        'label' => __('Dotted', 'advanced-gutenberg'),
-                                        'value' => 'dotted',
-                                    ),
-                                ),
-                            ),
-                            array(
-                                'title' => __('Border Radius', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'borderRadius',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Submit Button Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Border and Text Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'submitColor',
-                            ),
-                            array(
-                                'title' => __('Background Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'submitBgColor',
-                            ),
-                            array(
-                                'title' => __('Border Radius', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'submitRadius',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-images-slider' => array(
-                    array(
-                        'label'    => __('Images Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title'   => __('Action on click', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'actionOnClick',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Open image in lightbox', 'advanced-gutenberg'),
-                                        'value' => 'lightbox',
-                                    ),
-                                    array(
-                                        'label' => __('Open custom link', 'advanced-gutenberg'),
-                                        'value' => 'link',
-                                    ),
-                                ),
-                            ),
-                            array(
-                                'title' => __('Full width', 'advanced-gutenberg'),
-                                'type'  => 'checkbox',
-                                'name'  => 'fullWidth',
-                            ),
-                            array(
-                                'title' => __('Auto Height', 'advanced-gutenberg'),
-                                'type'  => 'checkbox',
-                                'name'  => 'autoHeight',
-                            ),
-                            array(
-                                'title' => __('Width', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'width',
-                                'min'   => 200,
-                                'max'   => 1300,
-                            ),
-                            array(
-                                'title' => __('Height', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'height',
-                                'min'   => 100,
-                                'max'   => 1000,
-                            ),
-                            array(
-                                'title' => __('Always show overlay', 'advanced-gutenberg'),
-                                'type'  => 'checkbox',
-                                'name'  => 'alwaysShowOverlay',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Color Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Hover Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'hoverColor',
-                            ),
-                            array(
-                                'title' => __('Title Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'titleColor',
-                            ),
-                            array(
-                                'title' => __('Text Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'textColor',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Text Alignment', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title'   => __('Vertical Alignment', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'vAlign',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Top', 'advanced-gutenberg'),
-                                        'value' => 'flex-start',
-                                    ),
-                                    array(
-                                        'label' => __('Center', 'advanced-gutenberg'),
-                                        'value' => 'center',
-                                    ),
-                                    array(
-                                        'label' => __('Bottom', 'advanced-gutenberg'),
-                                        'value' => 'flex-end',
-                                    ),
-                                ),
-                            ),
-                            array(
-                                'title'   => __('Horizontal Alignment', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'hAlign',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Left', 'advanced-gutenberg'),
-                                        'value' => 'flex-start',
-                                    ),
-                                    array(
-                                        'label' => __('Center', 'advanced-gutenberg'),
-                                        'value' => 'center',
-                                    ),
-                                    array(
-                                        'label' => __('Right', 'advanced-gutenberg'),
-                                        'value' => 'flex-end',
-                                    ),
-                                ),
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-columns' => array(
-                    array(
-                        'label'    => __('Columns Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title'   => __('Space between column', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'gutter',
-                                'options' => array(
-                                    array(
-                                        'label' => __('None', 'advanced-gutenberg'),
-                                        'value' => 0,
-                                    ),
-                                    array(
-                                        'label' => __('10px', 'advanced-gutenberg'),
-                                        'value' => 10,
-                                    ),
-                                    array(
-                                        'label' => __('20px', 'advanced-gutenberg'),
-                                        'value' => 20,
-                                    ),
-                                    array(
-                                        'label' => __('30px', 'advanced-gutenberg'),
-                                        'value' => 30,
-                                    ),
-                                    array(
-                                        'label' => __('40px', 'advanced-gutenberg'),
-                                        'value' => 40,
-                                    ),
-                                    array(
-                                        'label' => __('50px', 'advanced-gutenberg'),
-                                        'value' => 50,
-                                    ),
-                                    array(
-                                        'label' => __('70px', 'advanced-gutenberg'),
-                                        'value' => 70,
-                                    ),
-                                    array(
-                                        'label' => __('90px', 'advanced-gutenberg'),
-                                        'value' => 90,
-                                    ),
-                                ),
-                            ),
-                            array(
-                                'title'   => __('Vertical space when collapsed', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'collapsedGutter',
-                                'options' => array(
-                                    array(
-                                        'label' => __('None', 'advanced-gutenberg'),
-                                        'value' => 0,
-                                    ),
-                                    array(
-                                        'label' => __('10px', 'advanced-gutenberg'),
-                                        'value' => 10,
-                                    ),
-                                    array(
-                                        'label' => __('20px', 'advanced-gutenberg'),
-                                        'value' => 20,
-                                    ),
-                                    array(
-                                        'label' => __('30px', 'advanced-gutenberg'),
-                                        'value' => 30,
-                                    ),
-                                    array(
-                                        'label' => __('40px', 'advanced-gutenberg'),
-                                        'value' => 40,
-                                    ),
-                                    array(
-                                        'label' => __('50px', 'advanced-gutenberg'),
-                                        'value' => 50,
-                                    ),
-                                    array(
-                                        'label' => __('70px', 'advanced-gutenberg'),
-                                        'value' => 70,
-                                    ),
-                                    array(
-                                        'label' => __('90px', 'advanced-gutenberg'),
-                                        'value' => 90,
-                                    ),
-                                ),
-                            ),
-                            array(
-                                'title'   => __('Collapsed order RTL', 'advanced-gutenberg'),
-                                'type'    => 'checkbox',
-                                'name'    => 'collapsedRtl',
-                            )
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Row Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title'   => __('Vertical Align', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'vAlign',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Top', 'advanced-gutenberg'),
-                                        'value' => 'top',
-                                    ),
-                                    array(
-                                        'label' => __('Middle', 'advanced-gutenberg'),
-                                        'value' => 'middle',
-                                    ),
-                                    array(
-                                        'label' => __('Bottom', 'advanced-gutenberg'),
-                                        'value' => 'bottom',
-                                    ),
-                                    array(
-                                        'label' => __('Full Height', 'advanced-gutenberg'),
-                                        'value' => 'full',
-                                    ),
-                                ),
-                            ),
-                            array(
-                                'title'   => __('Columns Wrapped', 'advanced-gutenberg'),
-                                'type'    => 'checkbox',
-                                'name'    => 'columnsWrapped',
-                            ),
-                            array(
-                                'title'   => __('Wrapper Tag', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'wrapperTag',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Div', 'advanced-gutenberg'),
-                                        'value' => 'div',
-                                    ),
-                                    array(
-                                        'label' => __('Header', 'advanced-gutenberg'),
-                                        'value' => 'header',
-                                    ),
-                                    array(
-                                        'label' => __('Section', 'advanced-gutenberg'),
-                                        'value' => 'section',
-                                    ),
-                                    array(
-                                        'label' => __('Main', 'advanced-gutenberg'),
-                                        'value' => 'main',
-                                    ),
-                                    array(
-                                        'label' => __('Article', 'advanced-gutenberg'),
-                                        'value' => 'article',
-                                    ),
-                                    array(
-                                        'label' => __('Aside', 'advanced-gutenberg'),
-                                        'value' => 'aside',
-                                    ),
-                                    array(
-                                        'label' => __('Footer', 'advanced-gutenberg'),
-                                        'value' => 'footer',
-                                    ),
-                                ),
-                            ),
-                            array(
-                                'title' => __('Content Max Width', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'contentMaxWidth',
-                                'min'   => 0,
-                                'max'   => 2000,
-                            ),
-                            array(
-                                'title' => __('Content Min Height', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'contentMinHeight',
-                                'min'   => 0,
-                                'max'   => 2000,
-                            ),
-                        ),
-                    ),
-                ),
-                'advgb-column' => array(
-                    array(
-                        'label'    => __('Border Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title'   => __('Border style', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'borderStyle',
-                                'options' => array(
-                                    array(
-                                        'label' => __('None', 'advanced-gutenberg'),
-                                        'value' => 'none',
-                                    ),
-                                    array(
-                                        'label' => __('Solid', 'advanced-gutenberg'),
-                                        'value' => 'solid',
-                                    ),
-                                    array(
-                                        'label' => __('Dotted', 'advanced-gutenberg'),
-                                        'value' => 'dotted',
-                                    ),
-                                    array(
-                                        'label' => __('Dashed', 'advanced-gutenberg'),
-                                        'value' => 'dashed',
-                                    ),
-                                ),
-                            ),
-                            array(
-                                'title' => __('Border Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'borderColor',
-                            ),
-                            array(
-                                'title' => __('Border Width', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'borderWidth',
-                                'min'   => 0,
-                                'max'   => 20,
-                            ),
-                            array(
-                                'title' => __('Border Radius', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'borderRadius',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Column Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title'   => __('Text alignment', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'textAlign',
-                                'options' => array(
-                                    array(
-                                        'label' => __('Left', 'advanced-gutenberg'),
-                                        'value' => 'left',
-                                    ),
-                                    array(
-                                        'label' => __('Center', 'advanced-gutenberg'),
-                                        'value' => 'center',
-                                    ),
-                                    array(
-                                        'label' => __('Right', 'advanced-gutenberg'),
-                                        'value' => 'right',
-                                    ),
-                                ),
-                            ),
-                        ),
-                    )
-                ),
-                'advgb-icon' => array(
-                    array(
-                        'label'    => __('General Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Number of icons', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'numberItem',
-                                'min'   => 1,
-                                'max'   => 10,
-                            ),
-                        ),
-                    ),
-
-                ),
-                'advgb-infobox' => array(
-                    array(
-                        'label'    => __('Container Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Background Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'containerBackground',
-                            ),
-                            array(
-                                'title' => __('Border Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'containerBorderBackground',
-                            ),
-                            array(
-                                'title' => __('Border Width', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'containerBorderWidth',
-                                'min'   => 0,
-                                'max'   => 40,
-                            ),
-                            array(
-                                'title' => __('Border Radius', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'containerBorderRadius',
-                                'min'   => 0,
-                                'max'   => 200,
-                            ),
-                            array(
-                                'title' => __('Padding Top', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'containerPaddingTop',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding Bottom', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'containerPaddingBottom',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding Left', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'containerPaddingLeft',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding Right', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'containerPaddingRight',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Icon Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Icon Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'iconColor',
-                            ),
-                            array(
-                                'title' => __('Icon Size', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'iconSize',
-                                'min'   => 1,
-                                'max'   => 200,
-                            ),
-                            array(
-                                'title' => __('Background Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'iconBackground',
-                            ),
-                            array(
-                                'title' => __('Border Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'iconBorderBackground',
-                            ),
-                            array(
-                                'title' => __('Border Width', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'iconBorderWidth',
-                                'min'   => 0,
-                                'max'   => 40,
-                            ),
-                            array(
-                                'title' => __('Border Radius', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'iconBorderRadius',
-                                'min'   => 0,
-                                'max'   => 200,
-                            ),
-                            array(
-                                'title' => __('Padding Top', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'iconPaddingTop',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding Bottom', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'iconPaddingBottom',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding Left', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'iconPaddingLeft',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding Right', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'iconPaddingRight',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin Top', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'iconMarginTop',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin Bottom', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'iconMarginBottom',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin Left', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'iconMarginLeft',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin Right', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'iconMarginRight',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                        ),
-                    ),
-                    array(
-                        'label'    => __('Title Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Title Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'titleColor',
-                            ),
-                            array(
-                                'title' => __('Font Size (px)', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'titleSize',
-                                'min'   => 1,
-                                'max'   => 200,
-                            ),
-                            array(
-                                'title' => __('Line Height (px)', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'titleLineHeight',
-                                'min'   => 1,
-                                'max'   => 200,
-                            ),
-                            array(
-                                'title'   => __('HTML Tag', 'advanced-gutenberg'),
-                                'type'    => 'select',
-                                'name'    => 'titleHtmlTag',
-                                'options' => array(
-                                    array(
-                                        'label' => __('H1', 'advanced-gutenberg'),
-                                        'value' => 'h1',
-                                    ),
-                                    array(
-                                        'label' => __('H2', 'advanced-gutenberg'),
-                                        'value' => 'h2',
-                                    ),
-                                    array(
-                                        'label' => __('H3', 'advanced-gutenberg'),
-                                        'value' => 'h3',
-                                    ),
-                                    array(
-                                        'label' => __('H4', 'advanced-gutenberg'),
-                                        'value' => 'h4',
-                                    ),
-                                    array(
-                                        'label' => __('H5', 'advanced-gutenberg'),
-                                        'value' => 'h5',
-                                    ),
-                                    array(
-                                        'label' => __('H6', 'advanced-gutenberg'),
-                                        'value' => 'h6',
-                                    ),
-                                ),
-                            ),
-                            array(
-                                'title' => __('Padding Top', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'titlePaddingTop',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding Bottom', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'titlePaddingBottom',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding Left', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'titlePaddingLeft',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding Right', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'titlePaddingRight',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin Top', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'titleMarginTop',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin Bottom', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'titleMarginBottom',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin Left', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'titleMarginLeft',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin Right', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'titleMarginRight',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                        )
-                    ),
-                    array(
-                        'label'    => __('Text Settings', 'advanced-gutenberg'),
-                        'settings' => array(
-                            array(
-                                'title' => __('Color', 'advanced-gutenberg'),
-                                'type'  => 'color',
-                                'name'  => 'textColor',
-                            ),
-                            array(
-                                'title' => __('Font Size (px)', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'textSize',
-                                'min'   => 1,
-                                'max'   => 200,
-                            ),
-                            array(
-                                'title' => __('Line Height (px)', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'textLineHeight',
-                                'min'   => 1,
-                                'max'   => 200,
-                            ),
-                            array(
-                                'title' => __('Padding Top', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'textPaddingTop',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding Bottom', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'textPaddingBottom',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding Left', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'textPaddingLeft',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Padding Right', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'textPaddingRight',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin Top', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'textMarginTop',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin Bottom', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'textMarginBottom',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin Left', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'textMarginLeft',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                            array(
-                                'title' => __('Margin Right', 'advanced-gutenberg'),
-                                'type'  => 'number',
-                                'name'  => 'textMarginRight',
-                                'min'   => 0,
-                                'max'   => 100,
-                            ),
-                        )
-                    ),
-                ),
-            );
+            $blocks_settings_list = PublishPress\Blocks\Configuration::defaultConfig();
 
             $advgb_blocks_default_config = get_option('advgb_blocks_default_config');
             $current_block = $block;
@@ -5568,9 +3496,15 @@ if(!class_exists('AdvancedGutenbergMain')) {
             if( file_exists( plugin_dir_path( __FILE__ ) . 'pages/' . $page . '/' . $tab . '.php' ) ) {
                 include_once( plugin_dir_path( __FILE__ ) . 'pages/' . $page . '/' . $tab . '.php' );
             } else {
-                // Redirect to default page
-                wp_safe_redirect( admin_url( 'admin.php?page=advgb_settings' ) );
-                exit;
+                wp_add_inline_style(
+                    'advgb_admin_styles',
+                    '.publishpress-admin .nav-tab-wrapper { display: none !important; }'
+                );
+                printf(
+                    __( 'Page not found. Go to %sDashboard%s', 'advanced-gutenberg' ),
+                    '<a href="' . admin_url( 'admin.php?page=advgb_main' ) . '">',
+                    '</a>'
+                );
             }
         }
 
@@ -5601,67 +3535,6 @@ if(!class_exists('AdvancedGutenbergMain')) {
             $html .= '</ul>';
 
             return $html;
-        }
-
-        /**
-         * Register Block controls attributes in REST API
-         *
-         * @since 2.14.0
-         * @param string    $block_content  Block HTML output
-         * @param array     $block          Block attributes
-         *
-         * @return string                   $block_content or an empty string when block is hidden
-         */
-        public function blockControls( $block_content, $block ) {
-            if (
-                $this->settingIsEnabled( 'block_controls' )
-                && $block['blockName']
-                && isset($block['attrs']['advgbBlockControls'][0]['enabled'])
-                && (bool) $block['attrs']['advgbBlockControls'][0]['enabled'] === true
-            ) {
-                $bControl = $block['attrs']['advgbBlockControls'][0]; // [0] is for schedule control
-                $dateFrom = $dateTo = $recurring = null;
-                if ( ! empty( $bControl['dateFrom'] ) ) {
-                    $dateFrom = DateTime::createFromFormat( 'Y-m-d\TH:i:s', $bControl['dateFrom'] );
-                    // Reset seconds to zero to enable proper comparison
-                    $dateFrom->setTime( $dateFrom->format('H'), $dateFrom->format('i'), 0 );
-                }
-                if ( ! empty( $bControl['dateTo'] ) ) {
-                    $dateTo	= DateTime::createFromFormat( 'Y-m-d\TH:i:s', $bControl['dateTo'] );
-                    // Reset seconds to zero to enable proper comparison
-                    $dateTo->setTime( $dateTo->format('H'), $dateTo->format('i'), 0 );
-
-                    if ( $dateFrom ) {
-                        // Recurring is only relevant when both dateFrom and dateTo are defined
-                        $recurring = isset( $bControl['recurring'] ) ? $bControl['recurring'] : false;
-                    }
-                }
-
-                if ( $dateFrom || $dateTo ) {
-                    // Fetch current time keeping in mind the timezone
-                    $now = DateTime::createFromFormat( 'U', date_i18n( 'U', true ) );
-
-                    // Reset seconds to zero to enable proper comparison
-                    // as the from and to dates have those as 0
-                    // but do this only for the from comparison
-                    // as we need the block to stop showing at the right time and not 1 minute extra
-                    $nowFrom = clone $now;
-                    $nowFrom->setTime( $now->format('H'), $now->format('i'), 0 );
-
-                    if( $recurring ) {
-                        // Make the year same as today's
-                        $dateFrom->setDate( $nowFrom->format('Y'), $dateFrom->format('m'), $dateFrom->format('j') );
-                        $dateTo->setDate( $nowFrom->format('Y'), $dateTo->format('m'), $dateTo->format('j') );
-                    }
-
-                    if ( ! ( ( ! $dateFrom || $dateFrom->getTimestamp() <= $nowFrom->getTimestamp() ) && ( ! $dateTo || $now->getTimestamp() < $dateTo->getTimestamp() ) ) ) {
-                        // Empty $block_content (no visible)
-                        return '';
-                    }
-                }
-            }
-
-            return $block_content;
         }
 
         /**
@@ -6119,15 +3992,14 @@ if(!class_exists('AdvancedGutenbergMain')) {
                     'advgb_blocks_styles',
                     '@media only screen and (min-width: 652px) {
                         .widget-area {
-                          grid-template-columns: repeat(2, minmax( 0, 1fr ));
+                            grid-template-columns: repeat(2, minmax( 0, 1fr ));
                         }
-                      }
-                      @media only screen and (min-width: 1024px) {
+                    }
+                    @media only screen and (min-width: 1024px) {
                         .widget-area {
-                          grid-template-columns: repeat(3, minmax( 0, 1fr ));
+                            grid-template-columns: repeat(3, minmax( 0, 1fr ));
                         }
-                      }
-                  }'
+                    }'
                 );
             }
         }
@@ -6244,110 +4116,531 @@ if(!class_exists('AdvancedGutenbergMain')) {
             switch($blockName) {
 
                 case 'advgb/list':
+
+                    // Styles
                     $html_style = $this->advgb_AdvancedListStyles($blockAttrs);
+
+                    // Assets
+                    wp_enqueue_style( 'dashicons' );
                     break;
 
                 case 'advgb/button':
+
+                    // Styles
                     $html_style = $this->advgb_AdvancedButtonStyles($blockAttrs);
-                    $this->advgb_AdvancedButtonAssets($blockAttrs);
+
+                    // Pro - Assets
+                    if( defined( 'ADVANCED_GUTENBERG_PRO' ) && $this->settingIsEnabled( 'enable_advgb_blocks' ) ) {
+                        if ( isset($blockAttrs['iconDisplay'])
+                            && method_exists(
+                                'PPB_AdvancedGutenbergPro\Utils\Definitions',
+                                'advgb_pro_enqueue_styles_frontend_advbutton'
+                            )
+                        ) {
+                            PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_enqueue_styles_frontend_advbutton();
+                        }
+
+                        if ( method_exists(
+                            'PPB_AdvancedGutenbergPro\Utils\Definitions',
+                            'advgb_pro_enqueue_font_styles_frontend'
+                        ) ) {
+                            PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_enqueue_font_styles_frontend('advgb/button', $blockAttrs);
+                        }
+                    }
+
                     break;
 
                 case 'advgb/column':
                 case 'advgb/columns':
-                    $html_style = $this->advgb_AdvancedColumnsStyles($blockAttrs, $blockName);
-                    $this->advgb_AdvancedColumnsAssets($blockAttrs);
+
+                    // Styles
+                    $html_style = $this->advgb_AdvancedColumnsStyles( $blockAttrs, $blockName );
+
+                    // Assets
+                    wp_enqueue_style( 'advgb_columns_styles' );
+
                     break;
 
                 case 'advgb/login-form':
+
+                    // Assets
                     $html_style = $this->advgb_AdvancedLoginRegisterStyles($blockAttrs);
-                    $this->advgb_AdvancedLoginRegisterAssets($blockAttrs);
+
+                    // Assets
+                    wp_enqueue_style( 'dashicons' );
+                    wp_enqueue_script( 'jquery-effects-slide' );
+                    wp_enqueue_script(
+                        'advgb_lores_js',
+                        plugins_url( 'assets/blocks/login-form/frontend.js', dirname( __FILE__ ) ),
+                        ['jquery'],
+                        ADVANCED_GUTENBERG_VERSION
+                    );
+                    wp_localize_script(
+                        'advgb_lores_js',
+                        'advgbLoresForm',
+                        [
+                            'ajax_url' => admin_url( 'admin-ajax.php' ),
+                            'login_url' => wp_login_url(),
+                            'register_url' => wp_registration_url(),
+                            'lostpwd_url' => wp_lostpassword_url(),
+                            'home_url' => home_url(),
+                            'admin_url' => admin_url(),
+                            'register_enabled' => get_option( 'users_can_register' ),
+                            'unregistrable_notice' => __( 'User registration is currently not allowed.', 'advanced-gutenberg' ),
+                            'captcha_empty_warning' => __( 'Captcha must be checked!', 'advanced-gutenberg' ),
+                            'login_failed_notice' => __( 'Username or password is incorrect!', 'advanced-gutenberg' ),
+                        ]
+                    );
+                    $this->loadRecaptchaApi();
+
                     break;
 
                 case 'advgb/search-bar':
+
+                    // Styles
                     $html_style = $this->advgb_AdvancedSearchBarStyles($blockAttrs);
+
                     break;
 
                 case 'advgb/image':
+
+                    // Styles
                     $html_style = $this->advgb_AdvancedImageStyles($blockAttrs);
-                    $this->advgb_AdvancedImageAssets($blockAttrs);
+
+                    // Assets
+                    if ( array_key_exists( 'openOnClick', $blockAttrs ) ) {
+
+                        if( $blockAttrs['openOnClick'] == 'lightbox' ) {
+
+                            // Lightbox
+                            wp_enqueue_style( 'colorbox_style' );
+                            wp_enqueue_script( 'colorbox_js' );
+                            wp_enqueue_script(
+                                'advgbImageLightbox_js',
+                                plugins_url( 'assets/blocks/advimage/lightbox.js', dirname( __FILE__ ) ),
+                                ['jquery'],
+                                ADVANCED_GUTENBERG_VERSION
+                            );
+                        } elseif( $blockAttrs['openOnClick'] == 'url' ) {
+
+                            // Custom URL
+                            wp_enqueue_script(
+                                'advgbImageCustomURL_js',
+                                plugins_url( 'assets/blocks/advimage/url.js', dirname( __FILE__ ) ),
+                                ['jquery'],
+                                ADVANCED_GUTENBERG_VERSION
+                            );
+                        } else {
+                            // Nothing to do here
+                        }
+
+                    }
                     break;
 
                 case 'advgb/testimonial':
+
+                    // Styles
                     $html_style = $this->advgb_AdvancedTestimonialStyles($blockAttrs);
-                    $this->advgb_AdvancedTestimonialAssets($blockAttrs);
+
+                    // Assets
+                    wp_enqueue_style( 'dashicons' );
+
+                    // When sliderView exists...
+                    if ( array_key_exists( 'sliderView', $blockAttrs ) ) {
+                        wp_enqueue_style( 'slick_style' );
+                        wp_enqueue_style( 'slick_theme_style' );
+                        wp_enqueue_script( 'slick_js' );
+                        wp_enqueue_script(
+                            'advgb_testimonial_frontend',
+                            plugins_url( 'assets/blocks/testimonial/frontend.js', dirname( __FILE__ ) ),
+                            [],
+                            ADVANCED_GUTENBERG_VERSION
+                        );
+
+                        // Patch for Twenty Twenty-One
+                        $this->fixCssGridFooterWidgets();
+                    }
                     break;
 
                 case 'advgb/adv-tabs':
+
+                    // Styles
                     $html_style = $this->advgb_AdvancedTabsStyles($blockAttrs);
-                    $this->advgb_AdvancedTabsAssets($blockAttrs);
+
+                    // Assets
+                    wp_enqueue_script( 'jquery-ui-tabs' );
+                    wp_enqueue_script(
+                        'advgb_tabs_js',
+                        plugins_url('assets/blocks/advtabs/frontend.js', dirname(__FILE__)),
+                        array('jquery'),
+                        ADVANCED_GUTENBERG_VERSION
+                    );
+
+                    // Pro
+                    if ( defined( 'ADVANCED_GUTENBERG_PRO' )
+                        && method_exists(
+                            'PPB_AdvancedGutenbergPro\Utils\Definitions',
+                            'advgb_pro_inline_scripts_frontend'
+                        )
+                    ) {
+                        PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_inline_scripts_frontend(
+                            'advgb/adv-tabs'
+                        );
+                    }
+
                     break;
 
                 case 'advgb/icon':
+
+                    // Styles
                     $html_style = $this->advgb_AdvancedIconStyles($blockAttrs);
+
+                    // Assets
+                    wp_enqueue_style( 'material_icon_font' );
+
                     break;
 
                 case 'advgb/infobox':
-                    $html_style = $this->advgb_AdvancedInfoBoxStyles($blockAttrs);
+
+                    // Styles
+                    $html_style = $this->advgb_AdvancedInfoBoxStyles( $blockAttrs );
+
+                    // Assets
+                    wp_enqueue_style( 'material_icon_font' );
+
                     break;
 
                 case 'advgb/count-up':
-                    $html_style = $this->advgb_AdvancedCountUpStyles($blockAttrs);
+
+                    // Assets
+                    wp_enqueue_script( 'advgb_blocks_frontend_scripts' );
+
                     break;
 
                 case 'advgb/video':
-                    $this->advgb_AdvancedVideoAssets($blockAttrs);
+
+                    // Assets - When openInLightbox doesn't exist means lightbox is enabled
+                    if ( ! array_key_exists( 'openInLightbox', $blockAttrs ) ) {
+                        wp_enqueue_style( 'colorbox_style' );
+                        wp_enqueue_script( 'colorbox_js' );
+                        wp_enqueue_script(
+                            'advgbVideoLightbox_js',
+                            plugins_url( 'assets/blocks/advvideo/lightbox.js', dirname( __FILE__ ) ),
+                            ['jquery'],
+                            ADVANCED_GUTENBERG_VERSION
+                        );
+                    }
+
                     break;
 
                 case 'advgb/map':
-                    $this->advgb_AdvancedMapAssets($blockAttrs);
+
+                    // Assets
+                    wp_enqueue_script(
+                        'advgb_gmap_js',
+                        plugins_url( 'assets/blocks/map/frontend.js', dirname( __FILE__ ) ),
+                        [],
+                        ADVANCED_GUTENBERG_VERSION
+                    );
+                    $this->loadGoogleMapApi();
+
                     break;
 
                 case 'advgb/summary':
-                    $this->advgb_AdvancedSummaryAssets($blockAttrs);
+
+                    // Assets
+                    wp_enqueue_script(
+                        'summary_minimized',
+                        plugins_url( 'assets/blocks/summary/summaryMinimized.js', dirname( __FILE__ ) ),
+                        ['jquery'],
+                        ADVANCED_GUTENBERG_VERSION
+                    );
+
                     break;
 
                 case 'advgb/accordions':
-                    $this->advgb_AdvancedAccordionAssets($blockAttrs);
+
+                    // Assets
+                    wp_enqueue_script( 'jquery-ui-accordion' );
+                    wp_enqueue_script(
+                        'adv_accordion_js',
+                        plugins_url( 'assets/blocks/advaccordion/frontend.js', dirname( __FILE__ ) ),
+                        [
+                            'jquery',
+                            'jquery-ui-accordion'
+                        ],
+                        ADVANCED_GUTENBERG_VERSION
+                    );
+
+                    // Pro
+                    if ( defined( 'ADVANCED_GUTENBERG_PRO' )
+                        && method_exists(
+                            'PPB_AdvancedGutenbergPro\Utils\Definitions',
+                            'advgb_pro_inline_scripts_frontend'
+                        )
+                    ) {
+                        PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_inline_scripts_frontend( 'advgb/accordion-item' );
+                    }
+
                     break;
 
                 case 'advgb/woo-products':
-                    $this->advgb_AdvancedWooProductsAssets($blockAttrs);
+
+                    // Assets - When viewType is slider
+                    if ( array_key_exists( 'viewType', $blockAttrs ) && $blockAttrs['viewType'] == 'slider' ) {
+                        wp_enqueue_style( 'slick_style' );
+                        wp_enqueue_style( 'slick_theme_style' );
+                        wp_enqueue_script( 'slick_js' );
+                        wp_enqueue_script(
+                            'advgb_woo_products_js',
+                            plugins_url( 'assets/blocks/woo-products/slider.js', dirname( __FILE__ ) ),
+                            ['jquery'],
+                            ADVANCED_GUTENBERG_VERSION
+                        );
+
+                        // Patch for Twenty Twenty-One
+                        $this->fixCssGridFooterWidgets();
+                    }
+
                     break;
 
                 case 'advgb/images-slider':
-                    $this->advgb_AdvancedImagesSliderAssets($blockAttrs);
+
+                    // Assets
+                    wp_enqueue_style( 'slick_style' );
+                    wp_enqueue_style( 'slick_theme_style' );
+                    wp_enqueue_script( 'slick_js' );
+                    wp_enqueue_script(
+                        'advgbImageSliderLightbox_frontent_js',
+                        plugins_url( 'assets/blocks/images-slider/frontend.js', dirname( __FILE__ ) ),
+                        ['jquery'],
+                        ADVANCED_GUTENBERG_VERSION
+                    );
+
+                    if ( defined( 'ADVANCED_GUTENBERG_PRO' )
+                        && method_exists(
+                            'PPB_AdvancedGutenbergPro\Utils\Definitions',
+                            'advgb_pro_inline_scripts_frontend'
+                        )
+                    ) {
+                        $script = PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_inline_scripts_frontend(
+                            'advgb/images-slider',
+                            $blockAttrs
+                        );
+
+                        if( ! empty( $script ) ) {
+                            wp_add_inline_script(
+                                'advgbImageSliderLightbox_frontent_js',
+                                $script
+                            );
+                        }
+                    }
+
+                    // When lightbox is enabled
+                    if ( array_key_exists( 'actionOnClick', $blockAttrs )
+                        && $blockAttrs['actionOnClick'] == 'lightbox'
+                    ) {
+                        wp_enqueue_style( 'colorbox_style' );
+                        wp_enqueue_script( 'colorbox_js' );
+                        wp_enqueue_script(
+                            'advgbImageSliderLightbox_js',
+                            plugins_url( 'assets/blocks/images-slider/lightbox.js', dirname( __FILE__ ) ),
+                            [],
+                            ADVANCED_GUTENBERG_VERSION
+                        );
+                    }
+
+                    // Pro
+                    if( defined( 'ADVANCED_GUTENBERG_PRO' ) && $this->settingIsEnabled( 'enable_advgb_blocks' ) ) {
+                        if ( method_exists(
+                            'PPB_AdvancedGutenbergPro\Utils\Definitions',
+                            'advgb_pro_enqueue_font_styles_frontend'
+                            )
+                        ) {
+                            PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_enqueue_font_styles_frontend(
+                                'advgb/images-slider',
+                                $blockAttrs
+                            );
+                        }
+                    }
+
+                    // Patch for Twenty Twenty-One
+                    $this->fixCssGridFooterWidgets();
+
                     break;
 
                 case 'advgb/contact-form':
-                    $this->advgb_AdvancedContactFormAssets($blockAttrs);
+
+                    // Assets
+                    wp_enqueue_script(
+                        'advgbContactForm_js',
+                        plugins_url( 'assets/blocks/contact-form/frontend.js', dirname( __FILE__ ) ),
+                        ['jquery'],
+                        ADVANCED_GUTENBERG_VERSION
+                    );
+                    wp_localize_script(
+                        'advgbContactForm_js',
+                        'advgbContactForm',
+                        [
+                            'ajax_url' => admin_url( 'admin-ajax.php' )
+                        ]
+                    );
+                    $this->loadRecaptchaApi();
+
                     break;
 
                 case 'advgb/newsletter':
-                    $this->advgb_AdvancedNewsletterAssets($blockAttrs);
+
+                    // Assets
+                    wp_enqueue_script(
+                        'advgbNewsletter_js',
+                        plugins_url( 'assets/blocks/newsletter/frontend.js', dirname( __FILE__ ) ),
+                        [
+                            'jquery',
+                            'wp-i18n'
+                        ],
+                        ADVANCED_GUTENBERG_VERSION
+                    );
+                    wp_localize_script(
+                        'advgbNewsletter_js',
+                        'advgbNewsletter',
+                        [
+                            'ajax_url' => admin_url( 'admin-ajax.php' )
+                        ]
+                    );
+                    $this->loadRecaptchaApi();
+
                     break;
 
                 case 'advgb/recent-posts':
+
+                    // Styles
                     $html_style = $this->advgb_AdvancedRecentPostsStyles($blockAttrs);
-                    $this->advgb_AdvancedRecentPostsAssets($blockAttrs);
+
+                    // Assets
+                    wp_enqueue_style( 'dashicons' );
+                    wp_enqueue_style( 'advgb_recent_posts_styles' );
+
+                    if ( array_key_exists( 'postView', $blockAttrs )
+                        && $blockAttrs['postView'] == 'slider'
+                    ) {
+                        // Slider view
+                        wp_enqueue_style( 'slick_style' );
+                        wp_enqueue_style( 'slick_theme_style' );
+                        wp_enqueue_script( 'slick_js' );
+                        wp_enqueue_script(
+                            'advgb_recent_posts_slider_js',
+                            plugins_url( 'assets/blocks/recent-posts/slider.js', dirname( __FILE__ ) ),
+                            ['jquery'],
+                            ADVANCED_GUTENBERG_VERSION
+                        );
+
+                        // Pro
+                        if ( defined( 'ADVANCED_GUTENBERG_PRO' )
+                            && method_exists(
+                                'PPB_AdvancedGutenbergPro\Utils\Definitions',
+                                'advgb_pro_inline_scripts_frontend'
+                            )
+                        ) {
+                            $script = PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_inline_scripts_frontend(
+                                'advgb/recent-posts',
+                                $blockAttrs
+                            );
+
+                            if( ! empty( $script ) ) {
+                                wp_add_inline_script(
+                                    'advgb_recent_posts_slider_js',
+                                    $script
+                                );
+                            }
+                        }
+
+                        // Patch for Twenty Twenty-One
+                        $this->fixCssGridFooterWidgets();
+
+                    } elseif( array_key_exists( 'postView', $blockAttrs )
+                        && $blockAttrs['postView'] == 'masonry'
+                    ) {
+                        // Masonry view
+                        wp_enqueue_script( 'advgb_masonry_js' );
+                        wp_enqueue_script(
+                            'advgb_recent_posts_masonry_js',
+                            plugins_url( 'assets/blocks/recent-posts/masonry.js', dirname( __FILE__ ) ),
+                            [
+                                'jquery',
+                                'advgb_masonry_js'
+                            ],
+                            ADVANCED_GUTENBERG_VERSION
+                        );
+                    }
+
+                    // Pro
+                    if( defined( 'ADVANCED_GUTENBERG_PRO' ) && $this->settingIsEnabled( 'enable_advgb_blocks' ) ) {
+                        if ( method_exists(
+                            'PPB_AdvancedGutenbergPro\Utils\Definitions',
+                            'advgb_pro_enqueue_font_styles_frontend'
+                        ) ) {
+                            PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_enqueue_font_styles_frontend(
+                                'advgb/recent-posts',
+                                $blockAttrs
+                            );
+                        }
+                    }
+
                     break;
 
                 case 'advgb/countdown':
-                    $this->advgb_AdvancedCountdownAssets($blockAttrs);
+
+                    // Assets - Pro
+                    if( defined( 'ADVANCED_GUTENBERG_PRO' ) && $this->settingIsEnabled( 'enable_advgb_blocks' ) ) {
+                        if ( method_exists(
+                            'PPB_AdvancedGutenbergPro\Utils\Definitions',
+                            'advgb_pro_enqueue_scripts_frontend_countdown'
+                        ) ) {
+                            PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_enqueue_scripts_frontend_countdown();
+                        }
+                    }
+
                     break;
 
                 case 'core/gallery':
-                    $this->advgb_CoreGalleryAssets($blockAttrs); // Core block
+
+                    // Assets
+                    $saved_settings = get_option('advgb_settings');
+                    if ( $saved_settings['gallery_lightbox'] ) {
+                        wp_enqueue_style( 'colorbox_style' );
+                        wp_enqueue_script( 'colorbox_js' );
+                        wp_enqueue_script(
+                            'gallery_lightbox_js',
+                            plugins_url( 'assets/js/gallery.colorbox.init.js', dirname( __FILE__ ) ),
+                            ['jquery'],
+                            ADVANCED_GUTENBERG_VERSION
+                        );
+                        wp_localize_script(
+                            'gallery_lightbox_js',
+                            'advgb',
+                            [
+                                'imageCaption' => $saved_settings['gallery_lightbox_caption']
+                            ]
+                        );
+                    }
+
                     break;
 
                 default:
+
                     // Nothing to do here
+
                     break;
             }
 
-            // Pro
-            if(defined('ADVANCED_GUTENBERG_PRO')) {
+            // Styles and assets from Pro blocks
+            if( defined( 'ADVANCED_GUTENBERG_PRO' ) ) {
                 if ( method_exists( 'PPB_AdvancedGutenbergPro\Utils\Definitions', 'advgb_pro_set_styles_for_blocks' ) ) {
-                    $html_style .= PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_set_styles_for_blocks($blockAttrs, $blockName);
+                    $html_style .= PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_set_styles_for_blocks(
+                        $blockAttrs,
+                        $blockName
+                    );
                 }
             }
 
@@ -6727,7 +5020,6 @@ if(!class_exists('AdvancedGutenbergMain')) {
          */
         public function advgb_AdvancedIconStyles($blockAttrs)
         {
-            wp_enqueue_style('material_icon_font');
             $block_id = esc_html($blockAttrs['blockIDX']);
             $i = 0;
             $default_items = array();
@@ -6808,7 +5100,6 @@ if(!class_exists('AdvancedGutenbergMain')) {
          */
         public function advgb_AdvancedInfoBoxStyles($blockAttrs)
         {
-            wp_enqueue_style('material_icon_font');
             $block_id = esc_html($blockAttrs['blockIDX']);
 
             $container_bg = isset($blockAttrs['containerBackground']) ? esc_html($blockAttrs['containerBackground']) : '#f5f5f5';
@@ -6957,454 +5248,6 @@ if(!class_exists('AdvancedGutenbergMain')) {
             $style_html .= '}'; //end text style
 
             return $style_html;
-        }
-
-        /**
-         * Styles for Count Up Block
-         *
-         * @since    2.4.2
-         * @return  string      empty
-         */
-        public function advgb_AdvancedCountUpStyles()
-        {
-            wp_enqueue_script('advgb_blocks_frontend_scripts');
-        }
-
-        /**
-         * Assets for Adv. Image Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedImageAssets($blockAttrs)
-        {
-            if (array_key_exists('openOnClick', $blockAttrs) && $blockAttrs['openOnClick'] == 'lightbox') {
-                wp_enqueue_style('colorbox_style');
-                wp_enqueue_script('colorbox_js');
-
-                wp_enqueue_script(
-                    'advgbImageLightbox_js',
-                    plugins_url('assets/blocks/advimage/lightbox.js', dirname(__FILE__)),
-                    array('jquery'),
-                    ADVANCED_GUTENBERG_VERSION
-                );
-            }
-        }
-
-        /**
-         * Assets for Adv. Video Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedVideoAssets($blockAttrs)
-        {
-            // When openInLightbox doesn't exist means lightbox is enabled
-            if (!array_key_exists('openInLightbox', $blockAttrs)) {
-                wp_enqueue_style('colorbox_style');
-                wp_enqueue_script('colorbox_js');
-
-                wp_enqueue_script(
-                    'advgbVideoLightbox_js',
-                    plugins_url('assets/blocks/advvideo/lightbox.js', dirname(__FILE__)),
-                    array('jquery'),
-                    ADVANCED_GUTENBERG_VERSION
-                );
-            }
-        }
-
-        /**
-         * Assets for Map Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedMapAssets($blockAttrs)
-        {
-            wp_enqueue_script(
-                'advgb_gmap_js',
-                plugins_url('assets/blocks/map/frontend.js', dirname(__FILE__)),
-                array(),
-                ADVANCED_GUTENBERG_VERSION
-            );
-            $this->loadGoogleMapApi();
-        }
-
-        /**
-         * Assets for Gallery Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_CoreGalleryAssets($blockAttrs)
-        {
-            $saved_settings = get_option('advgb_settings');
-
-            if ($saved_settings['gallery_lightbox']) {
-                wp_enqueue_style('colorbox_style');
-                wp_enqueue_script('colorbox_js');
-
-                wp_enqueue_script(
-                    'gallery_lightbox_js',
-                    plugins_url('assets/js/gallery.colorbox.init.js', dirname(__FILE__)),
-                    array('jquery'),
-                    ADVANCED_GUTENBERG_VERSION
-                );
-
-                wp_localize_script('gallery_lightbox_js', 'advgb', array(
-                    'imageCaption' => $saved_settings['gallery_lightbox_caption']
-                ));
-            }
-        }
-
-        /**
-         * Assets for Summary Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedSummaryAssets($blockAttrs)
-        {
-            wp_enqueue_script(
-                'summary_minimized',
-                plugins_url('assets/blocks/summary/summaryMinimized.js', dirname(__FILE__)),
-                array('jquery')
-            );
-        }
-
-        /**
-         * Assets for Advanced Accordion Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedAccordionAssets($blockAttrs)
-        {
-            wp_enqueue_script('jquery-ui-accordion');
-            wp_enqueue_script(
-                'adv_accordion_js',
-                plugins_url('assets/blocks/advaccordion/frontend.js', dirname(__FILE__)),
-                array('jquery', 'jquery-ui-accordion')
-            );
-            if (
-                defined( 'ADVANCED_GUTENBERG_PRO' )
-                && method_exists( 'PPB_AdvancedGutenbergPro\Utils\Definitions', 'advgb_pro_inline_scripts_frontend' )
-            ) {
-                PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_inline_scripts_frontend('advgb/accordion-item');
-            }
-        }
-
-        /**
-         * Assets for Advanced Tabs Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedTabsAssets($blockAttrs)
-        {
-            wp_enqueue_script('jquery-ui-tabs');
-            wp_enqueue_script(
-                'advgb_tabs_js',
-                plugins_url('assets/blocks/advtabs/frontend.js', dirname(__FILE__)),
-                array('jquery'),
-                ADVANCED_GUTENBERG_VERSION
-            );
-            if (
-                defined( 'ADVANCED_GUTENBERG_PRO' )
-                && method_exists( 'PPB_AdvancedGutenbergPro\Utils\Definitions', 'advgb_pro_inline_scripts_frontend' )
-            ) {
-                PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_inline_scripts_frontend('advgb/adv-tabs');
-            }
-        }
-
-        /**
-         * Assets for Woo Products Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedWooProductsAssets($blockAttrs)
-        {
-            // When viewType is slider
-            if (array_key_exists('viewType', $blockAttrs) && $blockAttrs['viewType'] == 'slider') {
-                wp_enqueue_style('slick_style');
-                wp_enqueue_style('slick_theme_style');
-                wp_enqueue_script('slick_js');
-                wp_enqueue_script(
-                    'advgb_woo_products_js',
-                    plugins_url('assets/blocks/woo-products/slider.js', dirname(__FILE__)),
-                    array('jquery'),
-                    ADVANCED_GUTENBERG_VERSION
-                );
-
-                // Patch for Twenty Twenty-One
-                $this->fixCssGridFooterWidgets();
-            }
-        }
-
-        /**
-         * Assets for Images Slider Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedImagesSliderAssets($blockAttrs)
-        {
-            wp_enqueue_style('slick_style');
-            wp_enqueue_style('slick_theme_style');
-            wp_enqueue_script('slick_js');
-            wp_enqueue_script(
-                'advgbImageSliderLightbox_frontent_js',
-                plugins_url('assets/blocks/images-slider/frontend.js', dirname(__FILE__)),
-                array('jquery'),
-                ADVANCED_GUTENBERG_VERSION
-            );
-
-            if (
-                defined( 'ADVANCED_GUTENBERG_PRO' )
-                && method_exists( 'PPB_AdvancedGutenbergPro\Utils\Definitions', 'advgb_pro_inline_scripts_frontend' )
-            ) {
-                $script = PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_inline_scripts_frontend('advgb/images-slider', $blockAttrs);
-                if(!empty($script)) {
-                    wp_add_inline_script(
-                        'advgbImageSliderLightbox_frontent_js',
-                        $script
-                    );
-                }
-            }
-
-            // When lightbox is enabled
-            if (array_key_exists('actionOnClick', $blockAttrs) && $blockAttrs['actionOnClick'] == 'lightbox') {
-                wp_enqueue_style('colorbox_style');
-                wp_enqueue_script('colorbox_js');
-                wp_enqueue_script(
-                    'advgbImageSliderLightbox_js',
-                    plugins_url('assets/blocks/images-slider/lightbox.js', dirname(__FILE__)),
-                    array(),
-                    ADVANCED_GUTENBERG_VERSION
-                );
-            }
-
-            // Pro
-            if( defined( 'ADVANCED_GUTENBERG_PRO' ) && $this->settingIsEnabled( 'enable_advgb_blocks' ) ) {
-                if ( method_exists( 'PPB_AdvancedGutenbergPro\Utils\Definitions', 'advgb_pro_enqueue_font_styles_frontend' ) ) {
-                    PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_enqueue_font_styles_frontend('advgb/images-slider', $blockAttrs);
-                }
-            }
-
-            // Patch for Twenty Twenty-One
-            $this->fixCssGridFooterWidgets();
-        }
-
-        /**
-         * Assets for Contact Form Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedContactFormAssets($blockAttrs)
-        {
-            wp_enqueue_script(
-                'advgbContactForm_js',
-                plugins_url('assets/blocks/contact-form/frontend.js', dirname(__FILE__)),
-                array('jquery'),
-                ADVANCED_GUTENBERG_VERSION
-            );
-            wp_localize_script('advgbContactForm_js', 'advgbContactForm', array('ajax_url' => admin_url('admin-ajax.php')));
-            $this->loadRecaptchaApi();
-        }
-
-        /**
-         * Assets for Newsletter Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedNewsletterAssets($blockAttrs)
-        {
-            wp_enqueue_script(
-                'advgbNewsletter_js',
-                plugins_url('assets/blocks/newsletter/frontend.js', dirname(__FILE__)),
-                array('jquery', 'wp-i18n'),
-                ADVANCED_GUTENBERG_VERSION
-            );
-            wp_localize_script('advgbNewsletter_js', 'advgbNewsletter', array('ajax_url' => admin_url('admin-ajax.php')));
-            $this->loadRecaptchaApi();
-        }
-
-        /**
-         * Assets for Testimonial Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedTestimonialAssets($blockAttrs)
-        {
-            // When sliderView exists...
-            if (array_key_exists('sliderView', $blockAttrs)) {
-                wp_enqueue_style('slick_style');
-                wp_enqueue_style('slick_theme_style');
-                wp_enqueue_script('slick_js');
-                wp_enqueue_script(
-                    'advgb_testimonial_frontend',
-                    plugins_url('assets/blocks/testimonial/frontend.js', dirname(__FILE__)),
-                    array(),
-                    ADVANCED_GUTENBERG_VERSION
-                );
-
-                // Patch for Twenty Twenty-One
-                $this->fixCssGridFooterWidgets();
-            }
-        }
-
-        /**
-         * Assets for Columns Manager Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedColumnsAssets($blockAttrs)
-        {
-            wp_enqueue_style('advgb_columns_styles');
-        }
-
-        /**
-         * Assets for Login / Register Form Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedLoginRegisterAssets($blockAttrs)
-        {
-            wp_enqueue_script('jquery-effects-slide');
-            wp_enqueue_script(
-                'advgb_lores_js',
-                plugins_url('assets/blocks/login-form/frontend.js', dirname(__FILE__)),
-                array('jquery'),
-                ADVANCED_GUTENBERG_VERSION
-            );
-            wp_localize_script('advgb_lores_js', 'advgbLoresForm', array(
-                'ajax_url' => admin_url('admin-ajax.php'),
-                'login_url' => wp_login_url(),
-                'register_url' => wp_registration_url(),
-                'lostpwd_url' => wp_lostpassword_url(),
-                'home_url' => home_url(),
-                'admin_url' => admin_url(),
-                'register_enabled' => get_option('users_can_register'),
-                'unregistrable_notice' => __('User registration is currently not allowed.', 'advanced-gutenberg'),
-                'captcha_empty_warning' => __('Captcha must be checked!', 'advanced-gutenberg'),
-                'login_failed_notice' => __('Username or password is incorrect!', 'advanced-gutenberg'),
-            ));
-            $this->loadRecaptchaApi();
-        }
-
-        /**
-         * Assets for Recent Posts Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedRecentPostsAssets($blockAttrs)
-        {
-            wp_enqueue_style('advgb_recent_posts_styles');
-
-            if (array_key_exists('postView', $blockAttrs) && $blockAttrs['postView'] == 'slider') {
-                // Slider view
-                wp_enqueue_style('slick_style');
-                wp_enqueue_style('slick_theme_style');
-                wp_enqueue_script('slick_js');
-                wp_enqueue_script(
-                    'advgb_recent_posts_slider_js',
-                    plugins_url('assets/blocks/recent-posts/slider.js', dirname(__FILE__)),
-                    array('jquery'),
-                    ADVANCED_GUTENBERG_VERSION
-                );
-
-                if (
-                    defined( 'ADVANCED_GUTENBERG_PRO' )
-                    && method_exists( 'PPB_AdvancedGutenbergPro\Utils\Definitions', 'advgb_pro_inline_scripts_frontend' )
-                ) {
-                    $script = PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_inline_scripts_frontend('advgb/recent-posts', $blockAttrs);
-                    if(!empty($script)) {
-                        wp_add_inline_script(
-                            'advgb_recent_posts_slider_js',
-                            $script
-                        );
-                    }
-                }
-
-                // Patch for Twenty Twenty-One
-                $this->fixCssGridFooterWidgets();
-
-            } elseif(array_key_exists('postView', $blockAttrs) && $blockAttrs['postView'] == 'masonry') {
-                // Masonry view
-                wp_enqueue_script('advgb_masonry_js');
-                wp_enqueue_script(
-                    'advgb_recent_posts_masonry_js',
-                    plugins_url('assets/blocks/recent-posts/masonry.js', dirname(__FILE__)),
-                    array('jquery', 'advgb_masonry_js'),
-                    ADVANCED_GUTENBERG_VERSION
-                );
-            }
-
-            // Pro
-            if( defined( 'ADVANCED_GUTENBERG_PRO' ) && $this->settingIsEnabled( 'enable_advgb_blocks' ) ) {
-                if ( method_exists( 'PPB_AdvancedGutenbergPro\Utils\Definitions', 'advgb_pro_enqueue_font_styles_frontend' ) ) {
-                    PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_enqueue_font_styles_frontend('advgb/recent-posts', $blockAttrs);
-                }
-            }
-        }
-
-        /**
-         * Assets for Countdown Block
-         *
-         * @since   2.11.4
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedCountdownAssets($blockAttrs)
-        {
-            // Pro
-            if( defined( 'ADVANCED_GUTENBERG_PRO' ) && $this->settingIsEnabled( 'enable_advgb_blocks' ) ) {
-                if ( method_exists( 'PPB_AdvancedGutenbergPro\Utils\Definitions', 'advgb_pro_enqueue_scripts_frontend_countdown' ) ) {
-                    PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_enqueue_scripts_frontend_countdown();
-                }
-            }
-        }
-
-        /**
-         * Assets for Advanced Button Block
-         *
-         * @since   2.11.6
-         * @param   $blockAttrs The block attributes
-         * @return  void
-         */
-        public function advgb_AdvancedButtonAssets($blockAttrs)
-        {
-            // Pro
-            if(defined( 'ADVANCED_GUTENBERG_PRO' ) && $this->settingIsEnabled( 'enable_advgb_blocks' )) {
-                if ( isset($blockAttrs['iconDisplay']) && method_exists( 'PPB_AdvancedGutenbergPro\Utils\Definitions', 'advgb_pro_enqueue_styles_frontend_advbutton' ) ) {
-                    PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_enqueue_styles_frontend_advbutton();
-                }
-                if ( method_exists( 'PPB_AdvancedGutenbergPro\Utils\Definitions', 'advgb_pro_enqueue_font_styles_frontend' ) ) {
-                    PPB_AdvancedGutenbergPro\Utils\Definitions::advgb_pro_enqueue_font_styles_frontend('advgb/button', $blockAttrs);
-                }
-            }
         }
 
     }

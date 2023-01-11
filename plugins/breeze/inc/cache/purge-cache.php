@@ -130,7 +130,11 @@ class Breeze_PurgeCache {
 			$post_type = get_post_type( $post->ID );
 
 			$flush_cache = true;
-			if ( 'tribe_events' === $post_type ) {
+			$ignore_object_cache = array(
+				'tribe_events',
+				'shop_order',
+			);
+			if ( in_array( $post_type, $ignore_object_cache ) ) {
 				$flush_cache = false;
 			}
 		}

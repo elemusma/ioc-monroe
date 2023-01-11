@@ -15,7 +15,7 @@ class BVCallbackBase {
 		"MISC_WING_VERSION" => '1.2',
 		"FS_WING_VERSION" => '1.2',
 		"INFO_WING_VERSION" => '1.5',
-		"WATCH_WING_VERSION" => '1.0',
+		"WATCH_WING_VERSION" => '1.1',
 		"FS_WRITE_WING_VERSION" => '1.0',
 		"IPSTORE_WING_VERSION" => '1.0',
 		"PROTECT_WING_VERSION" => '1.0',

@@ -10,7 +10,7 @@ if (!class_exists('MCInfo')) :
 		public $badgeinfo = 'mcbadge';
 		public $ip_header_option = 'mcipheader';
 		public $brand_option = 'mcbrand';
-		public $version = '4.82';
+		public $version = '4.84';
 		public $webpage = 'https://www.malcare.com';
 		public $appurl = 'https://app.malcare.com';
 		public $slug = 'malcare-security/malcare.php';
@@ -109,11 +109,16 @@ if ($bvinfo->canSetCWBranding()) {
 
 		public function isValidEnvironment(){
 			$bvsiteinfo = new MCWPSiteInfo();
-			$siteurl = $bvsiteinfo->siteurl();
 			$bvconfig = $this->config;
-			if ($bvconfig && array_key_exists("abspath", $bvconfig) &&
-					array_key_exists("siteurl", $bvconfig) && !empty($siteurl)) {
-				return ($bvconfig["abspath"] == ABSPATH && $bvconfig["siteurl"] == $siteurl);
+
+			if (is_multisite()) {
+				return true;
+			} elseif ($bvconfig && array_key_exists("siteurl_scheme", $bvconfig)) {
+				$siteurl = $bvsiteinfo->siteurl('', $bvconfig["siteurl_scheme"]);
+				if (array_key_exists("abspath", $bvconfig) &&
+						array_key_exists("siteurl", $bvconfig) && !empty($siteurl)) {
+					return ($bvconfig["abspath"] == ABSPATH && $bvconfig["siteurl"] == $siteurl);
+				}
 			}
 			return true;
 		}

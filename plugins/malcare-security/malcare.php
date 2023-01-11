@@ -5,7 +5,7 @@ Plugin URI: https://www.malcare.com
 Description: MalCare WordPress Security Plugin - Malware Scanner, Cleaner, Security Firewall
 Author: MalCare Security
 Author URI: https://www.malcare.com
-Version: 4.82
+Version: 4.84
 Network: True
  */
 
@@ -78,12 +78,22 @@ if (is_admin()) {
 	add_action('admin_head', array($wpadmin, 'removeAdminNotices'), 3);
 	add_action('admin_notices', array($wpadmin, 'activateWarning'));
 	add_action('admin_enqueue_scripts', array($wpadmin, 'mcsecAdminMenu'));
-	##SOADMINMENU##
+	##ALPURGECACHEFUNCTION##
+	##ALADMINMENU##
 }
-
 
 if ((array_key_exists('bvreqmerge', $_POST)) || (array_key_exists('bvreqmerge', $_GET))) {
 	$_REQUEST = array_merge($_GET, $_POST);
+}
+
+if ($bvinfo->hasValidDBVersion()) {
+	if ($bvinfo->isServiceActive('activity_log')) {
+		require_once dirname( __FILE__ ) . '/wp_actlog.php';
+		$bvconfig = $bvinfo->config;
+		$actlog = new BVWPActLog($bvdb, $bvsettings, $bvinfo, $bvconfig['activity_log']);
+		$actlog->init();
+	}
+
 }
 
 if ((array_key_exists('bvplugname', $_REQUEST)) && ($_REQUEST['bvplugname'] == "malcare")) {
@@ -156,13 +166,6 @@ if ((array_key_exists('bvplugname', $_REQUEST)) && ($_REQUEST['bvplugname'] == "
 		$bvconfig = $bvinfo->config;
 		$dynsync = new BVWPDynSync($bvdb, $bvsettings, $bvconfig['dynsync']);
 		$dynsync->init();
-	}
-
-		if ($bvinfo->isServiceActive('activity_log')) {
-		require_once dirname( __FILE__ ) . '/wp_actlog.php';
-		$bvconfig = $bvinfo->config;
-		$actlog = new BVWPActLog($bvdb, $bvsettings, $bvinfo, $bvconfig['activity_log']);
-		$actlog->init();
 	}
 
 	}

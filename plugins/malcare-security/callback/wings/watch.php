@@ -7,7 +7,7 @@ class BVWatchCallback extends BVCallbackBase {
 	public $db;
 	public $settings;
 
-	const WATCH_WING_VERSION = 1.0;
+	const WATCH_WING_VERSION = 1.1;
 
 	public function __construct($callback_handler) {
 		$this->db = $callback_handler->db;
@@ -155,6 +155,19 @@ class BVWatchCallback extends BVCallbackBase {
 				}
 			}
 
+			if (array_key_exists('airlift_stats', $params)) {
+				$airlift_stats_table = "airlift_stats";
+				$airlift_stats_params = $params['airlift_stats'];
+				$table = $db->getBVTable($airlift_stats_table);
+				if (!isset($airlift_stats_params['bv_check_table']) || $db->isTablePresent($table)) {
+					$limit = intval(urldecode($airlift_stats_params['limit']));
+					$filter = urldecode($airlift_stats_params['filter']);
+					$db->deleteBVTableContent($airlift_stats_table, $airlift_stats_params['rmfilter']);
+					$resp["airlift_stats"] = $this->getData($table, $limit, $filter);
+				} else {
+					$resp["airlift_stats"] = array("status" => "TABLE_NOT_PRESENT");
+				}
+			}
 			$resp["status"] = "done";
 			break;
 		case "rmdata":

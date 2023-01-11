@@ -162,7 +162,7 @@ $icon = BREEZE_PLUGIN_URL . 'assets/images/file-active.png';
 
 			if ( false === $css_minify_state ) {
 				//$disable_inline_css = 'disabled="disabled"';
-				$disable_overlay    = ' br-apply-disable';
+				$disable_overlay = ' br-apply-disable';
 			}
 			?>
 			<div class="br-option-item<?php echo $disable_overlay; ?>">
@@ -200,7 +200,7 @@ $icon = BREEZE_PLUGIN_URL . 'assets/images/file-active.png';
 
 			if ( false === $css_minify_state ) {
 				//$disable_group_css = 'disabled="disabled"';
-				$disable_overlay   = ' br-apply-disable';
+				$disable_overlay = ' br-apply-disable';
 			}
 			?>
 			<div class="br-option-item<?php echo $disable_overlay; ?>">
@@ -336,7 +336,7 @@ $icon = BREEZE_PLUGIN_URL . 'assets/images/file-active.png';
 			$disable_overlay  = '';
 			if ( false === $js_minify_state ) {
 				//$disable_group_js = 'disabled="disabled"';
-				$disable_overlay  = ' br-apply-disable';
+				$disable_overlay = ' br-apply-disable';
 			}
 			?>
 			<div class="br-option-item<?php echo $disable_overlay; ?>">
@@ -372,7 +372,7 @@ $icon = BREEZE_PLUGIN_URL . 'assets/images/file-active.png';
 			$disable_overlay   = '';
 			if ( false === $js_minify_state ) {
 				//$disable_inline_js = 'disabled="disabled"';
-				$disable_overlay   = ' br-apply-disable';
+				$disable_overlay = ' br-apply-disable';
 			}
 			?>
 			<div class="br-option-item<?php echo $disable_overlay; ?>">
@@ -585,29 +585,29 @@ $icon = BREEZE_PLUGIN_URL . 'assets/images/file-active.png';
 				</div>
 				<div class="br-option">
 					<?php
-                    // Delay All JavaScript START
+					// Delay All JavaScript START
 					/**
 					 * Used to disable one of the options when the ther is active.
 					 */
 					$basic_value_all = isset( $options['breeze-delay-all-js'] ) ? filter_var( $options['breeze-delay-all-js'], FILTER_VALIDATE_BOOLEAN ) : false;
 					$is_enabled_all  = ( isset( $basic_value_all ) && true === $basic_value_all ) ? checked( $options['breeze-delay-all-js'], '1', false ) : '';
-                    // END
+					// END
 
 					$basic_value_inlinejs = isset( $options['breeze-enable-js-delay'] ) ? filter_var( $options['breeze-enable-js-delay'], FILTER_VALIDATE_BOOLEAN ) : false;
 					$is_enabled_inlinejs  = ( isset( $basic_value_inlinejs ) && true === $basic_value_inlinejs ) ? checked( $options['breeze-enable-js-delay'], '1', false ) : '';
 
-                    $delay_inline_disabled = '';
-                    if(true ===  $basic_value_all){
-	                    $delay_inline_disabled = 'disabled="disabled"';
-                    }
+					$delay_inline_disabled = '';
+					if ( true === $basic_value_all ) {
+						$delay_inline_disabled = 'disabled="disabled"';
+					}
 					?>
-                    <div class="on-off-checkbox">
-                        <label class="br-switcher">
-                            <input <?php echo $delay_inline_disabled; ?> id="enable-js-delay" name="enable-js-delay" type="checkbox" class="br-box" value="1" <?php echo $is_enabled_inlinejs; ?>>
-                            <div class="br-see-state">
-                            </div>
-                        </label><br>
-                    </div>
+					<div class="on-off-checkbox">
+						<label class="br-switcher">
+							<input <?php echo $delay_inline_disabled; ?> id="enable-js-delay" name="enable-js-delay" type="checkbox" class="br-box" value="1" <?php echo $is_enabled_inlinejs; ?>>
+							<div class="br-see-state">
+							</div>
+						</label><br>
+					</div>
 					<?php
 					$js_output = '';
 					if ( ! empty( $options['breeze-delay-js-scripts'] ) ) {
@@ -637,14 +637,14 @@ $icon = BREEZE_PLUGIN_URL . 'assets/images/file-active.png';
 							</p>
 						</div>
 					</div>
-                    <p class="br-important">
+					<p class="br-important">
 						<?php
 						echo '<strong>';
 						_e( 'Important: ', 'breeze' );
 						echo '</strong>';
 						_e( 'Use only one option "Delay JS Inline Scripts" OR "Delay All JavaScript" at same time.', 'breeze' );
 						?>
-                    </p>
+					</p>
 				</div>
 			</div>
 			<!-- END OPTION -->
@@ -667,17 +667,17 @@ $icon = BREEZE_PLUGIN_URL . 'assets/images/file-active.png';
 					}
 
 					$delay_js_disabled = '';
-					if(true ===  $basic_value_inlinejs){
+					if ( true === $basic_value_inlinejs ) {
 						$delay_js_disabled = 'disabled="disabled"';
 					}
 					?>
-                    <div class="on-off-checkbox">
-                        <label class="br-switcher">
-                            <input <?php echo $delay_js_disabled; ?> id="breeze-delay-all-js" name="breeze-delay-all-js" type="checkbox" class="br-box" value="1" <?php echo $is_enabled_all; ?>>
-                            <div class="br-see-state">
-                            </div>
-                        </label><br>
-                    </div>
+					<div class="on-off-checkbox">
+						<label class="br-switcher">
+							<input <?php echo $delay_js_disabled; ?> id="breeze-delay-all-js" name="breeze-delay-all-js" type="checkbox" class="br-box" value="1" <?php echo $is_enabled_all; ?>>
+							<div class="br-see-state">
+							</div>
+						</label><br>
+					</div>
 
 					<div class="br-note">
 						<p>
@@ -727,14 +727,14 @@ $icon = BREEZE_PLUGIN_URL . 'assets/images/file-active.png';
 							</p>
 						</div>
 					</div>
-                    <p class="br-important">
+					<p class="br-important">
 						<?php
 						echo '<strong>';
 						_e( 'Important: ', 'breeze' );
 						echo '</strong>';
 						_e( 'Use only one option "Delay JS Inline Scripts" OR "Delay All JavaScript" at same time.', 'breeze' );
 						?>
-                    </p>
+					</p>
 				</div>
 			</div>
 			<!-- END OPTION -->
