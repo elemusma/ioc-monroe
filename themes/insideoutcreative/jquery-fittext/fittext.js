@@ -7,7 +7,7 @@
 // $(".fittext7").fitText(.2);
 // $(".fittext8").fitText(.575);
 // $("#fittext3").fitText(1.1, { minFontSize: '50px', maxFontSize: '75px' });
-$(".page-title").fitText(1.5);
+// $(".page-title").fitText(1.5);
 // $(".subtitle").fitText(2.5);
 
 // $("#home-subtext").fitText(1.11);

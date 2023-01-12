@@ -24,7 +24,13 @@ background: radial-gradient(circle, rgba(255,255,255,0) 0%, rgba(75,113,255,1) 7
  
  echo '<div class="col-12 ml-auto p-0">';
 //  echo '<div class="bg-accent pt-3 pb-3">';
- echo '<h1 class="text-white text-center mb-0 page-title text-uppercase text-shadow" style="letter-spacing:0.2em;">' . get_the_title() . '</h1>';
+
+echo '<div class="d-flex align-items-center justify-content-center w-100">';
+echo '<h1 class="text-white text-center mb-0 page-title text-uppercase text-shadow" style="letter-spacing:0.2em;font-size:5vw;">' . get_the_title() . '</h1>';
+
+echo wp_get_attachment_image(227,'full','',['class'=>'','style'=>'width:105px;height:105px;object-fit:contain;']);
+
+echo '</div>';
 //  echo '</div>';
  
  if(have_rows('header_content')): while(have_rows('header_content')): the_row();
