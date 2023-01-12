@@ -36,7 +36,7 @@ foreach( $relationship as $post ):
 // Setup this post for WP functions (variable must be named $post).
 setup_postdata($post);
 $counter++;
-echo '<div class="col-lg-4 col-md-6 text-white mb-5">';
+echo '<div class="col-md-6 text-white mb-5">';
 echo '<div class="position-relative pt-2 pr-4 pl-4 h-100 d-flex align-items-end col-services" style="border:1px solid var(--accent-quinary);">';
 
 echo '<div class="position-absolute w-100 h-100 bg-accent" style="top:0;left:0;mix-blend-mode:overlay;opacity:.65;"></div>';

@@ -139,7 +139,7 @@ foreach( $relationship as $post ):
 // Setup this post for WP functions (variable must be named $post).
 setup_postdata($post);
 $counter++;
-echo '<div class="col-lg-4 col-md-6 text-white mb-5">';
+echo '<div class="col-md-6 text-white mb-5">';
 echo '<div class="position-relative pt-2 pr-4 pl-4 h-100 d-flex align-items-end col-services" style="border:1px solid var(--accent-quinary);">';
 
 echo '<div class="position-absolute w-100 h-100 bg-accent" style="top:0;left:0;mix-blend-mode:overlay;opacity:.65;"></div>';
@@ -226,6 +226,24 @@ if(have_rows('content_group_bottom')):
 echo '</div>';
 
     echo '</div>';
+    echo '</div>';
+
+    $galleryBottom = get_sub_field('gallery_bottom');
+if( $galleryBottom ): 
+    echo '<div class="container-fluid">';
+    echo '<div class="row row-content align-items-center justify-content-center pt-5">';
+foreach( $galleryBottom as $image ):
+echo '<div class="col-lg col-md-3 col-6 col col-portfolio mt-3 mb-3 overflow-h">';
+echo '<div class="position-relative">';
+echo '<a href="' . wp_get_attachment_image_url($image['id'], 'full') . '" data-lightbox="image-set" data-title="' . $image['title'] . '">';
+echo wp_get_attachment_image($image['id'], 'full','',['class'=>'w-100 img-portfolio','style'=>'height:100px;object-fit:contain;'] );
+echo '</a>';
+echo '</div>';
+echo '</div>';
+endforeach; 
+echo '</div>';
+endif;
+
     echo '</div>';
 
     echo '</section>';

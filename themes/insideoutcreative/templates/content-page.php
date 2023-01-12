@@ -5,9 +5,9 @@
 get_header(); 
 global $post;
 
-if ( $post->post_parent ) {
-    echo '<section><a href="' . get_permalink( $post->post_parent ) . '" class="btn btn-primary position-fixed text-uppercase h1 btn-go-back">Go Back to ' . get_the_title( $post->post_parent ) . '</a></section>';
-    }
+// if ( $post->post_parent ) {
+    // echo '<section><a href="' . get_permalink( $post->post_parent ) . '" class="btn btn-primary position-fixed text-uppercase h1 btn-go-back">Go Back to ' . get_the_title( $post->post_parent ) . '</a></section>';
+    // }
 
     
 if ( ! post_password_required( $post ) ) {
@@ -48,7 +48,11 @@ echo wp_get_attachment_image($globalPlaceholderImg['id'],'full',"",['class'=>'w-
 <div class="about-details pt-5 pl-4 pr-4">
 <div class="page details">
 <!-- <h4 class="bodoni">Best in Denver</h4> -->
-<h5 class=""><?php the_field('main_title'); ?></h5>
+<?php 
+echo '<h1>' . get_the_title() . '</h1>';
+
+?>
+<!-- <h5 class=""><?php the_field('main_title'); ?></h5> -->
 </div>
 <!-- <h6><em>High tech, intelligent and cutting edge.</em></h6> -->
 <?php the_field('description'); ?>

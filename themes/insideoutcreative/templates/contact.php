@@ -19,13 +19,20 @@ echo wp_get_attachment_image(26,'full','',['class'=>'bg-img position-absolute w-
 } ?>
     <div class="container pb-4">
         <div class="row justify-content-center">
-            <div class="col-md-9 pt-5 pb-5 p-4">
+            <div class="col-lg-6 pt-5 pb-5 p-4 text-white">
             <div class="content">
-            <div class="position-absolute bg-white" style="opacity:.75;width:100%;height:100%;top:0;left:0;"></div>
+            <!-- <div class="position-absolute bg-white" style="opacity:.75;width:100%;height:100%;top:0;left:0;"></div> -->
             <div class="position-relative">
-<?php if(have_posts()) : while(have_posts()): the_post(); the_content(); endwhile; else: ?>
-    <p>Sorry, no posts matched your criteria.</p>
-<?php endif; ?>
+<?php echo get_field('column_left'); ?>
+</div>
+            </div>
+            </div>
+
+            <div class="col-lg-6 pt-5 pb-5 p-4 text-white">
+            <div class="content">
+            <!-- <div class="position-absolute bg-white" style="opacity:.75;width:100%;height:100%;top:0;left:0;"></div> -->
+            <div class="position-relative">
+<?php echo get_field('column_right'); ?>
 </div>
             </div>
             </div>
