@@ -36,7 +36,7 @@ echo wp_get_attachment_image($logo['id'],'full',"",['class'=>'w-100 h-auto']);
     </div>
 </section>
 
-<div class="text-center pt-3 pb-3 pl-5 pr-5">
+<div class="text-center pt-3 pb-3 pl-5 pr-5 bg-white">
     <div class="d-flex justify-content-center align-items-center">
 
         

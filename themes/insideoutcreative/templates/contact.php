@@ -11,12 +11,15 @@ section.hero {
     display: none;
 }
 </style>
-<section class="pt-5 pb-5 position-relative" style="overflow:hidden;">
-<?php if(has_post_thumbnail()){
-    the_post_thumbnail('full',array('class'=>'bg-img position-absolute w-100 h-100'));
-} else { 
-echo wp_get_attachment_image(26,'full','',['class'=>'bg-img position-absolute w-100 h-100']); 
-} ?>
+<section class="pt-5 pb-5 position-relative" style="overflow:hidden;background: rgb(252, 176, 64);
+    background: linear-gradient(180deg, rgba(252, 176, 64, 1) 0%, rgba(0, 53, 146, 1) 50%);">
+<?php 
+// if(has_post_thumbnail()){
+//     the_post_thumbnail('full',array('class'=>'bg-img position-absolute w-100 h-100'));
+// } else { 
+// echo wp_get_attachment_image(26,'full','',['class'=>'bg-img position-absolute w-100 h-100']); 
+// } 
+?>
     <div class="container pb-4">
         <div class="row justify-content-center">
             <div class="col-lg-6 pt-5 pb-5 p-4 text-white">

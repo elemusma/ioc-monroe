@@ -84,6 +84,11 @@ echo '</div>';
      if($img):
      echo '<div class="col-md-6" data-aos="' . $imgDataAos . '">';
          echo wp_get_attachment_image($img['id'],'full','',['class'=>'w-100 h-100','style'=>'object-fit:cover;']);
+         if($img['caption']){
+            echo '<div class="text-center">';
+            echo '<span class="">' . $img['caption'] . '</span>';
+            echo '</div>';
+         }
      echo '</div>';
      endif;
  
@@ -149,11 +154,11 @@ echo '<h3 class="mb-0 bold h4" style="">' . get_the_title() . '</h3>';
 echo '</a>';
 
 echo '<div class="w-100 position-relative" style="height:250px;">';
-echo '<span class="h1 pb-5 d-inline-block blair-light">' . str_pad($counter, 2, '0', STR_PAD_LEFT) . '</span>';
+// echo '<span class="h1 pb-5 d-inline-block blair-light">' . str_pad($counter, 2, '0', STR_PAD_LEFT) . '</span>';
 
-echo '<div class="container position-absolute" style="bottom:0;">';
+echo '<div class="container h-100 align-items-center d-flex justify-content-center" style="bottom:0;">';
 
-echo '<div class="row align-items-baseline">';
+echo '<div class="row align-items-center">';
 echo '<div class="col-md-2 pb-lg-0 pl-0 pb-3 text-white">';
 
 echo '<div class="" style="border:1px solid var(--accent-tertiary);border-radius:50%;width: 35px;height: 35px;display: flex;align-items: center;justify-content: center;">';
@@ -162,8 +167,8 @@ echo '</div>';
 
 echo '</div>';
 
-echo '<div class="col-lg-5 text-white pl-0">';
-echo '<h4 class="mb-0 h5 pb-4" style="border-bottom:10px solid var(--accent-secondary);"><a href="' . get_the_permalink() . '">' . get_the_title() . '</a></h4>';
+echo '<div class="col-md-10 text-white pl-0">';
+echo '<h4 class="mb-0 h5" style=""><a href="' . get_the_permalink() . '">' . get_the_title() . '</a></h4>';
 echo '</div>';
 echo '</div>';
 echo '</div>';

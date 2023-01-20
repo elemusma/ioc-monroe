@@ -3,7 +3,12 @@
     height: 85vh;
     object-fit: cover;
 }
+
 body:not(.home) .img-hero {
     min-height: 200px;
     height: 30vh;
+}
+
+.logged-in header.position-fixed {
+    margin-top: 32px;
 }
