@@ -31,6 +31,38 @@ class Breeze_PurgeCache {
 		add_action( 'comment_post', array( $this, 'purge_post_on_new_comment' ), 10, 3 );
 		add_action( 'wp_set_comment_status', array( $this, 'purge_post_on_comment_status_change' ), 10, 2 );
 		add_action( 'set_comment_cookies', array( $this, 'set_comment_cookie_exceptions' ), 10, 2 );
+
+		add_action( 'switch_theme', array( &$this, 'clear_local_cache_on_switch' ), 9, 3 );
+		add_action( 'customize_save_after', array( &$this, 'clear_customizer_cache' ), 11, 1 );
+	}
+
+	/**
+	 * When customizer settings are saved ( Publish button is clicked ), clear all cache.
+	 *
+	 * @param $element
+	 *
+	 * @return void
+	 */
+	public function clear_customizer_cache( $element ) {
+
+		do_action( 'breeze_clear_all_cache' );
+	}
+
+	/**
+	 * Clear local cache on theme switch.
+	 *
+	 * @param $new_name
+	 * @param $new_theme
+	 * @param $old_theme
+	 *
+	 * @return void
+	 */
+	public function clear_local_cache_on_switch( $new_name, $new_theme, $old_theme ) {
+		//delete minify
+		#Breeze_MinificationCache::clear_minification();
+		//clear normal cache
+		#Breeze_PurgeCache::breeze_cache_flush();
+		do_action( 'breeze_clear_all_cache' );
 	}
 
 	/**
@@ -64,6 +96,10 @@ class Breeze_PurgeCache {
 		$do_cache_reset = true;
 		if ( 'tribe_events' === $post_type ) {
 			$do_cache_reset = false;
+		}
+
+		if ( did_action( 'edit_post' ) ) {
+			return;
 		}
 
 		// File based caching only

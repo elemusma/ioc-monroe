@@ -412,12 +412,6 @@ function breeze_cache( $buffer, $flags ) {
 
 	//set cache provider header if not exists cache file
 	header( 'Cache-Provider:CLOUDWAYS-CACHE-' . $X1 . 'C' );
-
-	// Do not send this header in case we are behind a varnish proxy
-	if ( ! isset( $_SERVER['HTTP_X_VARNISH'] ) ) {
-		header( 'Cache-Control: no-cache' ); // Check back every time to see if re-download is necessary
-	}
-
 	header( 'Last-Modified: ' . gmdate( 'D, d M Y H:i:s', $modified_time ) . ' GMT' );
 
 	if ( function_exists( 'ob_gzhandler' ) && ! empty( $GLOBALS['breeze_config']['cache_options']['breeze-gzip-compression'] ) ) {

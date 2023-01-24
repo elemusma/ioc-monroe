@@ -903,6 +903,9 @@ class Breeze_Configuration {
 	public static function clean_system( $type = '' ) {
 		global $wpdb;
 
+		set_as_network_screen();
+		$return_value = true;
+
 		switch ( $type ) {
 			case 'revisions':
 				/**
@@ -1257,15 +1260,76 @@ class Breeze_Configuration {
 				}
 				break;
 			case 'optimize_database':
-				$all_db_tables = $wpdb->get_col( 'SHOW TABLES' );
-				if ( $all_db_tables ) {
-					$tables = implode( ',', $all_db_tables );
+				$all_db_tables = array();
+				$total_of_tables = 0;
+				if ( defined( 'WP_NETWORK_ADMIN' ) || ! is_multisite() ) {
+					$sql_get = $wpdb->get_results(
+						$wpdb->prepare( 'SELECT `TABLE_NAME` FROM INFORMATION_SCHEMA.TABLES WHERE `TABLE_SCHEMA`=%s AND (`ENGINE`=%s OR `ENGINE`=%s OR `ENGINE`=%s)', DB_NAME, 'InnoDB', 'MyISAM', 'ARCHIVE' )
+					);
+					if ( $sql_get ) {
+						foreach ( $sql_get as $db_table ) {
+							$all_db_tables[] = $db_table->TABLE_NAME;
+						}
+						$total_of_tables = count($all_db_tables);
+					}
+
+				} else {
+					$blog_id = (int) $wpdb->blogid;
+					if ( 1 === $blog_id ) {
+						$sql_get    = $wpdb->get_results(
+							$wpdb->prepare( 'SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE `TABLE_SCHEMA`=%s AND (`ENGINE`=%s OR `ENGINE`=%s OR `ENGINE`=%s)', DB_NAME, 'InnoDB', 'MyISAM', 'ARCHIVE' )
+							, OBJECT );
+						$table_list = '';
+						if ( $sql_get ) {
+							foreach ( $sql_get as $db_table ) {
+								$table_list .= "{$db_table->TABLE_NAME}\n";
+							}
+							preg_match_all( '/(wp_[^_\d_].*)/i', $table_list, $tables_list );
+
+							if ( isset( $tables_list[0] ) && ! empty( $tables_list[0] ) ) {
+								$all_db_tables = $tables_list[0];
+							}
+							$total_of_tables = count($all_db_tables);
+						}
+
+					} else {
+						$sql_get = $wpdb->get_results(
+							$wpdb->prepare( 'SELECT `TABLE_NAME` FROM INFORMATION_SCHEMA.TABLES WHERE `TABLE_SCHEMA`=%s AND (`ENGINE`=%s OR `ENGINE`=%s OR `ENGINE`=%s) AND `TABLE_NAME` LIKE %s', DB_NAME, 'InnoDB', 'MyISAM', 'ARCHIVE', $wpdb->prefix . '%' )
+						);
+						if ( $sql_get ) {
+							foreach ( $sql_get as $db_table ) {
+								$all_db_tables[] = $db_table->TABLE_NAME;
+							}
+							$total_of_tables = count($all_db_tables);
+						}
+					}
+				}
+
+
+				if ( ! isset( $_POST['db_count'] ) ) {
+					$db_count = 0;
+				} else {
+					$db_count = absint( $_POST['db_count'] );
+				}
+
+				$only_these_tables = array_chunk( $all_db_tables, 50, true );
+
+				if ( isset( $only_these_tables[ $db_count ] ) ) {
+
+					$tables = implode( ',', $only_these_tables[ $db_count ] );
 					$wpdb->query( "OPTIMIZE TABLE $tables" ); //phpcs:ignore
 				}
+				$db_count ++;
+				if ( isset( $only_these_tables[ $db_count ] ) ) {
+					$return_value = array( 'optmize_no' => $db_count, 'db_total' => $total_of_tables);
+				} else {
+					$return_value = true;
+				}
+
 				break;
 		}
 
-		return true;
+		return $return_value;
 	}
 
 	/**
@@ -1408,9 +1472,37 @@ class Breeze_Configuration {
 
 				break;
 			case 'optimize_database':
+				if ( defined( 'WP_NETWORK_ADMIN' ) || ! is_multisite() ) {
 				$return = $wpdb->get_var(
 					$wpdb->prepare( 'SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE `TABLE_SCHEMA`=%s AND (`ENGINE`=%s OR `ENGINE`=%s OR `ENGINE`=%s)', DB_NAME, 'InnoDB', 'MyISAM', 'ARCHIVE' )
 				);
+				} else {
+					$blog_id = (int) $wpdb->blogid;
+					$return  = 0;
+					if ( 1 === $blog_id ) {
+						$sql_get    = $wpdb->get_results(
+							$wpdb->prepare( 'SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE `TABLE_SCHEMA`=%s AND (`ENGINE`=%s OR `ENGINE`=%s OR `ENGINE`=%s)', DB_NAME, 'InnoDB', 'MyISAM', 'ARCHIVE' )
+							, OBJECT );
+						$table_list = '';
+						if ( $sql_get ) {
+							foreach ( $sql_get as $db_table ) {
+								$table_list .= "{$db_table->TABLE_NAME}\n";
+							}
+							preg_match_all( '/(wp_[^_\d_].*)/i', $table_list, $tables_list );
+
+							if ( isset( $tables_list[0] ) && ! empty( $tables_list[0] ) ) {
+								$return = count( $tables_list[0] ) ;
+							}
+						}
+
+					} else {
+						$return = $wpdb->get_var(
+							$wpdb->prepare( 'SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE `TABLE_SCHEMA`=%s AND (`ENGINE`=%s OR `ENGINE`=%s OR `ENGINE`=%s) AND `TABLE_NAME` LIKE %s', DB_NAME, 'InnoDB', 'MyISAM', 'ARCHIVE', $wpdb->prefix . '%' )
+						);
+					}
+
+				}
+
 				#$return  = count( $wpdb->get_col( 'SHOW TABLES' ) );
 				break;
 		}
@@ -1630,6 +1722,7 @@ class Breeze_Configuration {
 			'optimize_database'       => array( 'optimize_database' ),
 		);
 
+		$return_value = true;
 		if ( isset( $_POST['action_type'] ) ) {
 			$type = $_POST['action_type'];
 
@@ -1647,7 +1740,7 @@ class Breeze_Configuration {
 			} else {
 
 				if ( isset( $items[ $type ] ) ) {
-					self::optimize_database( $items[ $type ] );
+					$return_value = self::optimize_database( $items[ $type ] );
 				}
 			}
 
@@ -1655,7 +1748,7 @@ class Breeze_Configuration {
 		// $type = array( 'revisions', 'drafted', 'trash', 'comments_trash', 'comments_spam', 'trackbacks', 'transient' );
 
 
-		echo json_encode( array( 'clear' => true ) );
+		echo json_encode( array( 'clear' => $return_value ) );
 		exit;
 	}
 
@@ -1684,8 +1777,9 @@ class Breeze_Configuration {
 	 */
 	public static function optimize_database( $items ) {
 		set_as_network_screen();
+		$to_return = true;
 
-		if ( is_multisite() && is_network_admin() ) {
+		if ( 'optimize_database' !== $items[0] && is_multisite() && is_network_admin() ) {
 			$sites = get_sites(
 				array(
 					'fields' => 'ids',
@@ -1695,15 +1789,20 @@ class Breeze_Configuration {
 			foreach ( $sites as $blog_id ) {
 				switch_to_blog( $blog_id );
 				foreach ( $items as $item ) {
-					self::clean_system( $item );
+					$to_return = self::clean_system( $item );
 				}
 				restore_current_blog();
 			}
 		} else {
 			foreach ( $items as $item ) {
-				self::clean_system( $item );
+				$action_result = self::clean_system( $item );
+				if ( ! is_bool( $action_result ) ) {
+					$to_return = $action_result;
 			}
 		}
+	}
+
+		return $to_return;
 	}
 
 

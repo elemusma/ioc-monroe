@@ -4,9 +4,9 @@
     transition: all .25s ease-in-out;
 }
 
-.col-services:hover img {
+/* .col-services:hover img {
     transform: scale(1.05);
-}
+} */
 
 .col-services:hover .col-services-overlay {
     opacity: 0 !important;
