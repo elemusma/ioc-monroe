@@ -9,7 +9,8 @@ input.gform_button.button {
   width: 100%;
   margin: auto;
   cursor: pointer;
-  color: white;
+  color: white !important;
+  font-weight: 900;
   box-shadow: none !important;
 }
 
@@ -27,6 +28,11 @@ textarea {
   box-shadow: inset 1px 1px 8px #eaeaea !important;
   border: none;
   color: var(--accent-primary);
+}
+
+input:focus-visible,
+textarea:focus-visible {
+  outline-color: var(--accent-secondary);
 }
 
 input[type=file] {
