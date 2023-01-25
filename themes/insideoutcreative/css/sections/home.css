@@ -4,6 +4,10 @@
     }
 }
 
+section {
+    overflow: hidden;
+}
+
 /* start of services home */
 .col-services-link {
     transition: all .25s ease-in-out;
