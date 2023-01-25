@@ -1,3 +1,10 @@
+input,
+textarea {
+  box-shadow: inset 1px 1px 8px #eaeaea !important;
+  border: none;
+  color: var(--accent-primary);
+}
+
 input.gform_button.button {
   background-color: var(--accent-secondary);
   border-color: var(--accent-secondary);
@@ -9,7 +16,7 @@ input.gform_button.button {
   width: 100%;
   margin: auto;
   cursor: pointer;
-  color: white !important;
+  color: white;
   font-weight: 900;
   box-shadow: none !important;
 }
@@ -22,13 +29,6 @@ input.gform_button.button:hover {
 /* .gform_footer.top_label {
   margin-bottom: -90px !important;
 } */
-
-input,
-textarea {
-  box-shadow: inset 1px 1px 8px #eaeaea !important;
-  border: none;
-  color: var(--accent-primary);
-}
 
 input:focus-visible,
 textarea:focus-visible {
