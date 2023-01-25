@@ -16,7 +16,7 @@ if ( ! post_password_required( $post ) ) {
 <div class="background-image"></div>
 <div class="container pt-5 mb-5">
 <div class="row pb-5 mb-5 justify-content-around">
-<div class="col-md-5 img--main">
+<div class="col-lg-5 img--main">
 <div class="h-100">
 <?php 
 $image = get_field('main_image');
@@ -39,7 +39,7 @@ echo wp_get_attachment_image($globalPlaceholderImg['id'],'full',"",['class'=>'w-
 ?>
 </div>
 </div>
-<div class="col-lg-6 col-md-6 sm-text-center about"> 
+<div class="col-lg-6 pt-lg-0 pt-5 sm-text-center about"> 
 <div class="about-first-half">
 <div class="about-before"></div>
 <div class="about-middle"></div>
