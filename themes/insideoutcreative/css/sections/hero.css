@@ -12,3 +12,9 @@ body:not(.home) .img-hero {
 .logged-in header.position-fixed {
     margin-top: 32px;
 }
+
+@media only screen and (max-width:767px) {
+    .logged-in header.position-fixed {
+        margin-top: 43px;
+    }
+}
