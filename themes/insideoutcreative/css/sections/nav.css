@@ -36,6 +36,12 @@ ul.menu>li>a {
     font-family: unset; */
 }
 
+@media only screen and (max-width:767px) {
+    #menu-contact>li>a {
+        font-size: 12px;
+    }
+}
+
 .current-menu-item>a,
 .current_page_parent>a,
 #menu-main-menu>.current_page_item>a,
