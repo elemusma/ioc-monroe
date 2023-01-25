@@ -26,6 +26,7 @@ input,
 textarea {
   box-shadow: inset 1px 1px 8px #eaeaea !important;
   border: none;
+  color: var(--accent-primary);
 }
 
 input[type=file] {
